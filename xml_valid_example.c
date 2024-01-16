@@ -3,25 +3,28 @@
 #include <string.h>
 #include <libxml/xmlschemas.h>
 
-
-xmlSchemaPtr parseSchemaDoc( xmlDocPtr schemaDoc )
+int parseSchemaDoc( xmlDocPtr schemaDoc, xmlSchemaPtr *schema )
 {
   xmlSchemaParserCtxtPtr schemaParserCtxt = xmlSchemaNewDocParserCtxt( schemaDoc );
   if( NULL == schemaParserCtxt )
 	{
-	  return NULL;
+	  return -1;
 	}
 
-  xmlSchemaPtr schema = xmlSchemaParse( schemaParserCtxt );
+  *schema = xmlSchemaParse( schemaParserCtxt );
 
   xmlSchemaFreeParserCtxt( schemaParserCtxt );
 
-  return schema;
+  if( NULL == *schema )
+	{
+	  return -1;
+	}
+
+  return 0;
 }
 
 int validateSchemaPtrSubjDoc( xmlSchemaPtr schemaPtr, xmlDocPtr subjDoc )
 {
-
   // create an XML Schemas validation context based on the given schema
   xmlSchemaValidCtxtPtr schemaValidCtxt = xmlSchemaNewValidCtxt( schemaPtr );
   if( NULL == schemaValidCtxt )
@@ -41,13 +44,15 @@ int validateSchemaPtrSubjDoc( xmlSchemaPtr schemaPtr, xmlDocPtr subjDoc )
 
 int validateSchemaDocSubjDoc( xmlDocPtr schemaDoc, xmlDocPtr subjDoc )
 {
-  xmlSchemaPtr schemaPtr = parseSchemaDoc( schemaDoc );
-  if( NULL == schemaPtr )
+  xmlSchemaPtr schemaPtr;
+
+  int result = parseSchemaDoc( schemaDoc, &schemaPtr );
+  if( 0 != result )
 	{
-	  return -1;
+	  return result;
 	}
 
-  int result = validateSchemaPtrSubjDoc( schemaPtr, subjDoc );
+  result = validateSchemaPtrSubjDoc( schemaPtr, subjDoc );
 
   xmlSchemaFree( schemaPtr );
 
@@ -57,6 +62,10 @@ int validateSchemaDocSubjDoc( xmlDocPtr schemaDoc, xmlDocPtr subjDoc )
 int validateSchemaDocSubjString( xmlDocPtr schemaDoc, char const* subjString )
 {
   xmlDocPtr subjDoc = xmlReadMemory( subjString, strlen( subjString ), "doc.xml", NULL, 0 );
+  if( NULL == subjDoc )
+	{
+	  return -1;
+	}
 
   int result = validateSchemaDocSubjDoc( schemaDoc, subjDoc );
 
@@ -69,6 +78,10 @@ int validateSchemaStringSubjString( char const* schemaString, char const* subjSt
 {
 
   xmlDocPtr schemaDoc = xmlReadMemory( schemaString, strlen( schemaString ), "schema.xml", NULL, 0 );
+  if( NULL == schemaDoc )
+	{
+	  return -1;
+	}
 
   int result = validateSchemaDocSubjString( schemaDoc, subjString );
 
@@ -80,12 +93,18 @@ int validateSchemaStringSubjString( char const* schemaString, char const* subjSt
 int main( void )
 {
 
-  char const* docString = "<doc/>";
-  char const* schemaDocString = "";
+  char const* docString = "<note/>";
+  char const* schemaDocString = "<?xml version=\"1.0\"?><xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"><xs:element name=\"note\"></xs:element></xs:schema>";
 
   int result = validateSchemaStringSubjString( schemaDocString, docString );
-
-  printf( "%d\n", result );
+  if( 0 == result )
+	{
+	  printf( "ok\n" );
+	}
+  else
+	{
+	  printf( "Error: %d\n", result );
+	}
   
   return result;
 }
