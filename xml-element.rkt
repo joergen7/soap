@@ -18,26 +18,21 @@
 (define prefix-context : (Parameterof (Listof (Pairof Symbol String)))
   (make-parameter '()))
 
-(: make-xml-element (-> (-> qname) (Listof (Pairof Symbol (-> String))) (Listof XExpr) XExpr))
-(define (make-xml-element name-thunk att-list body)
+(: make-xml-element (-> qname (Listof (Pairof Symbol String)) (Listof XExpr) XExpr))
+(define (make-xml-element name att-list body)
 
-  (: proc (-> (Pairof Symbol (-> String)) (List Symbol String)))
+  (: proc (-> (Pairof Symbol String) (List Symbol String)))
   (define (proc p)
-    (list (car p) ((cdr p))))
+    (list (car p) (cdr p)))
 
   (define z : (Listof (List Symbol String))
-    (append (map (λ ([p : (Pairof Symbol String)])
-                   (list (car p) (cdr p)))
-                 (prefix-context))
-            (map (λ ([p : (Pairof Symbol (-> String))])
-                   (list (car p) ((cdr p))))
-                 att-list)))
+    (append (map proc (append (prefix-context) att-list))))
 
   (define a : (Pairof (Listof (List Symbol String)) (Listof XExpr))
     (cons z body))
 
   (define result : XExpr
-    (cons (qname->symbol (name-thunk)) a))
+    (cons (qname->symbol name) a))
 
   result)
 

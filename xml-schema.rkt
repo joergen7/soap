@@ -72,7 +72,7 @@
   (U xs:restriction))
 
 (struct xs:restriction
-  ([base : qname]
+  ([base : (-> qname)]
    [body : xs:restriction-member]))
 
 (define-type xs:restriction-member
@@ -127,7 +127,7 @@
 
 (struct xs:attribute
   ([name     : Symbol]
-   [type     : qname]
+   [type     : (-> qname)]
    [default  : (U #f String)]
    [required : Boolean]))
 
@@ -147,16 +147,16 @@
    [body : (Listof xs:element)]))
 
 
-(: make-occur-list (-> Nonnegative-Integer Nonnegative-Integer (Listof (Pairof Symbol (-> String)))))
+(: make-occur-list (-> Nonnegative-Integer Nonnegative-Integer (Listof (Pairof Symbol String))))
 (define (make-occur-list min-occurs max-occurs)
-   (let ([l1 : (Listof (Pairof Symbol (-> String)))
+   (let ([l1 : (Listof (Pairof Symbol String))
              (if (= min-occurs 1)
                  '()
-                 (list (cons 'minOccurs (λ () (number->string min-occurs)))))]
-         [l2 : (Listof (Pairof Symbol (-> String)))
+                 (list (cons 'minOccurs (number->string min-occurs))))]
+         [l2 : (Listof (Pairof Symbol String))
              (if (= max-occurs 1)
                  '()
-                 (list (cons 'maxOccurs (λ () (number->string max-occurs)))))])
+                 (list (cons 'maxOccurs (number->string max-occurs))))])
      (append l1 l2)))
 
 (: xs->xexpr (-> Any XExpr))
@@ -167,25 +167,25 @@
    (with-prefix ([tns target-namespace]
                  [xs  "http://www.w3.org/2001/XMLSchema"])
      (make-xml-element
-      (xs schema)
-      (list (cons 'targetNamespace (λ () target-namespace)))
+      ((xs schema))
+      (list (cons 'targetNamespace target-namespace))
       (clear-prefix
        (map xs->xexpr body))))]
 
   ;; xs:element
   [((xs:element name type default min-occurs max-occurs))
-   (let ([occur-list : (Listof (Pairof Symbol (-> String)))
+   (let ([occur-list : (Listof (Pairof Symbol String))
                      (make-occur-list min-occurs max-occurs)]
-         [default-list : (Listof (Pairof Symbol (-> String)))
+         [default-list : (Listof (Pairof Symbol String))
            (if default
-               (list (cons 'default (λ () default)))
+               (list (cons 'default default))
                '())]
-         [name-list : (Listof (Pairof Symbol (-> String)))
-                    (list (cons 'name (λ () (symbol->string name))))]
-         [type-list : (Listof (Pairof Symbol (-> String)))
-                    (list (cons 'type (λ () (qname->string (type)))))])
+         [name-list : (Listof (Pairof Symbol String))
+                    (list (cons 'name (symbol->string name)))]
+         [type-list : (Listof (Pairof Symbol String))
+                    (list (cons 'type (qname->string (type))))])
    (make-xml-element
-    (xs element)
+    ((xs element))
     (append
      name-list
      type-list
@@ -193,20 +193,54 @@
      occur-list)
     '()))]
 
-  ;; attribute
+  ;; xs:simple-type
+
+  ;; xs:restriction
+
+  ;; xs:min-inclusive
+
+  ;; xs:min-exclusive
+
+  ;; xs:enumeration
+
+  ;; xs:pattern
+
+  ;; xs:length
+
+  ;; xs:min-length
+
+  ;; xs:max-length
+
+  ;; xs:complex-type
+
+
+  ;; xs:attribute
   [((xs:attribute name type default required))
-   (let ([name-list : (Listof (Pairof Symbol (-> String)))
-                    (list (cons 'name (λ () (qname->string ((tns name))))))])
+   (let ([name-list : (Listof (Pairof Symbol String))
+                    (list (cons 'name (symbol->string name)))]
+         [type-list : (Listof (Pairof Symbol String))
+                    (list (cons 'type (qname->string (type))))]
+         [default-list : (Listof (Pairof Symbol String))
+           (if default
+               (list (cons 'default default))
+               '())]
+         [required-list : (Listof (Pairof Symbol String))
+                        (if required
+                            (list (cons 'use "required"))
+                            '())])
      (make-xml-element
-      (xs attribute)
+      ((xs attribute))
       (append
-       name-list)
+       name-list
+       type-list
+       default-list
+       required-list)
       '()))]
 
   ;; xs:sequence
   [((xs:sequence min-occurs max-occurs body))
    (make-xml-element
-    (xs sequence)
+    ((xs sequence))
     (make-occur-list min-occurs max-occurs)
     (clear-prefix
      (map xs->xexpr body)))]
@@ -214,7 +248,7 @@
   ;; xs:all
   [((xs:all min-occurs max-occurs body))
    (make-xml-element
-    (xs all)
+    ((xs all))
     (make-occur-list min-occurs max-occurs)
     (clear-prefix
      (map xs->xexpr body)))]
@@ -222,7 +256,7 @@
 ;; xs:choice
   [((xs:choice min-occurs max-occurs body))
    (make-xml-element
-    (xs choice)
+    ((xs choice))
     (make-occur-list min-occurs max-occurs)
     (clear-prefix
      (map xs->xexpr body)))])
@@ -241,27 +275,37 @@
                 x-element)
 
   (check-equal? (xs->xexpr (xs:element 'blub (tns mytype) "1" 2 3))
-                '(xs:element ((name "blub")
-                              (type "tns:mytype")
-                              (default "1")
+                '(xs:element ((name      "blub")
+                              (type      "tns:mytype")
+                              (default   "1")
                               (minOccurs "2")
                               (maxOccurs "3"))))
 
-  (parameterize ([xs-prefix 'xsd]
-                 [tns-prefix 'tanaspa])
-    (check-equal? (xs->xexpr (xs:element 'blub (tns mytype) "1" 2 3))
-                  '(xsd:element ((name "blub")
-                                 (type "tanaspa:mytype")
-                                 (default "1")
+  (let ([element (xs:element 'blub (tns mytype) "1" 2 3)])
+    (check-equal? (parameterize ([xs-prefix 'xsd]
+                                 [tns-prefix 'tanaspa])
+                    (xs->xexpr element))
+                  '(xsd:element ((name      "blub")
+                                 (type      "tanaspa:mytype")
+                                 (default   "1")
                                  (minOccurs "2")
                                  (maxOccurs "3")))))
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" (list a-element)))
-                (list 'xs:schema '((xmlns:xs "http://www.w3.org/2001/XMLSchema")
-                                  (xmlns:tns "urn:target-namespace")
-                                  (targetNamespace "urn:target-namespace"))
+                (list 'xs:schema '((xmlns:xs        "http://www.w3.org/2001/XMLSchema")
+                                   (xmlns:tns       "urn:target-namespace")
+                                   (targetNamespace "urn:target-namespace"))
                       x-element))
 
+  (check-equal? (xs->xexpr (xs:attribute 'prodid xs:string #f #f))
+                '(xs:attribute ((name "prodid")
+                                (type "xs:string"))))
+
+  (check-equal? (xs->xexpr (xs:attribute 'prodid xs:string "blub" #t))
+                '(xs:attribute ((name    "prodid")
+                                (type    "xs:string")
+                                (default "blub")
+                                (use     "required"))))
   )
      
 
