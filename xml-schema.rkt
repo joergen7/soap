@@ -28,6 +28,7 @@
 
 (struct xs:schema
   ([target-namespace : String]
+   [ns-list          : (Listof (Pairof Symbol String))]
    [body             : (Listof xs:schema-member)]))
 
 (define-type xs:schema-member
@@ -163,14 +164,15 @@
 (define/match (xs->xexpr x)
 
   ;; xs:schema
-  [((xs:schema target-namespace body))
-   (with-prefix ([tns target-namespace]
-                 [xs  "http://www.w3.org/2001/XMLSchema"])
-     (make-xml-element
-      ((xs schema))
-      (list (cons 'targetNamespace target-namespace))
-      (clear-prefix
-       (map xs->xexpr body))))]
+  [((xs:schema target-namespace ns-list body))
+   (set-prefix ns-list
+               (with-prefix ([tns target-namespace]
+                             [xs  "http://www.w3.org/2001/XMLSchema"])
+                 (make-xml-element
+                  ((xs schema))
+                  (list (cons 'targetNamespace target-namespace))
+                  (clear-prefix
+                   (map xs->xexpr body)))))]
 
   ;; xs:element
   [((xs:element name type default min-occurs max-occurs))
@@ -271,6 +273,19 @@
   (define x-element : XExpr
     '(xs:element ((name "value") (type "xs:string"))))
 
+  (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" '() (list a-element)))
+                (list 'xs:schema '((xmlns:xs        "http://www.w3.org/2001/XMLSchema")
+                                   (xmlns:tns       "urn:target-namespace")
+                                   (targetNamespace "urn:target-namespace"))
+                      x-element))
+
+  (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" '((blub . "urn:bla")) (list a-element)))
+                (list 'xs:schema '((xmlns:xs        "http://www.w3.org/2001/XMLSchema")
+                                   (xmlns:tns       "urn:target-namespace")
+                                   (xmlns:blub      "urn:bla")
+                                   (targetNamespace "urn:target-namespace"))
+                      x-element))
+
   (check-equal? (xs->xexpr a-element)
                 x-element)
 
@@ -290,12 +305,6 @@
                                  (default   "1")
                                  (minOccurs "2")
                                  (maxOccurs "3")))))
-
-  (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" (list a-element)))
-                (list 'xs:schema '((xmlns:xs        "http://www.w3.org/2001/XMLSchema")
-                                   (xmlns:tns       "urn:target-namespace")
-                                   (targetNamespace "urn:target-namespace"))
-                      x-element))
 
   (check-equal? (xs->xexpr (xs:attribute 'prodid xs:string #f #f))
                 '(xs:attribute ((name "prodid")
