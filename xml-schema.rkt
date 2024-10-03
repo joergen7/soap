@@ -66,14 +66,8 @@
 
 (struct xs:simple-type
   ([name : Symbol]
-   [body : (Listof xs:simple-type-member)]))
-
-(define-type xs:simple-type-member
-  (U xs:restriction))
-
-(struct xs:restriction
-  ([base : (-> qname)]
-   [body : xs:restriction-member]))
+   [base : (-> qname)]
+   [body : (Listof xs:restriction-member)]))
 
 (define-type xs:restriction-member
   (U xs:min-inclusive
@@ -189,22 +183,79 @@
     '()))]
 
   ;; xs:simple-type
-
-  ;; xs:restriction
+  [((xs:simple-type name base body))
+   (make-xml-element
+    ((xs simpleType))
+    (list (cons 'name (symbol->string name)))
+    (clear-prefix
+     (list
+      (make-xml-element
+       ((xs restriction))
+       (list (cons 'base (qname->string (base))))
+       (map xs->xexpr body)))))]
 
   ;; xs:min-inclusive
-
+  [((xs:min-inclusive value))
+   (make-xml-element
+    ((xs minInclusive))
+    (list (cons 'value (number->string value)))
+    '())]
+  
   ;; xs:min-exclusive
+  [((xs:min-exclusive value))
+   (make-xml-element
+    ((xs minExclusive))
+    (list (cons 'value (number->string value)))
+    '())]
+
+  ;; xs:max-inclusive
+  [((xs:max-inclusive value))
+   (make-xml-element
+    ((xs maxInclusive))
+    (list (cons 'value (number->string value)))
+    '())]
+
+  ;; xs:max-exclusive
+  [((xs:max-exclusive value))
+   (make-xml-element
+    ((xs maxExclusive))
+    (list (cons 'value (number->string value)))
+    '())]
 
   ;; xs:enumeration
+  [((xs:enumeration value))
+   (make-xml-element
+    ((xs enumeration))
+    (list (cons 'value value))
+    '())]
 
   ;; xs:pattern
+  [((xs:pattern value))
+   (make-xml-element
+    ((xs pattern))
+    (list (cons 'value value))
+    '())]
 
   ;; xs:length
+  [((xs:length value))
+   (make-xml-element
+    ((xs length))
+    (list (cons 'value (number->string value)))
+    '())]
 
   ;; xs:min-length
+  [((xs:min-length value))
+   (make-xml-element
+    ((xs minLength))
+    (list (cons 'value (number->string value)))
+    '())]
 
   ;; xs:max-length
+  [((xs:max-length value))
+   (make-xml-element
+    ((xs maxLength))
+    (list (cons 'value (number->string value)))
+    '())]
 
   ;; xs:complex-type
   [((xs:complex-type name body))
@@ -299,6 +350,43 @@
                                  (minOccurs "2")
                                  (maxOccurs "3")))))
 
+
+  (check-equal? (xs->xexpr (xs:simple-type 'atype xs:string '()))
+                '(xs:simpleType ((name "atype"))
+                                (xs:restriction ((base "xs:string")))))
+  
+  (check-equal? (xs->xexpr (xs:simple-type 'atype xs:string (list (xs:enumeration "bla"))))
+                '(xs:simpleType ((name "atype"))
+                                (xs:restriction ((base "xs:string"))
+                                                (xs:enumeration ((value "bla"))))))
+
+  (check-equal? (xs->xexpr (xs:min-inclusive 5))
+                '(xs:minInclusive ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:min-exclusive 5))
+                '(xs:minExclusive ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:max-inclusive 5))
+                '(xs:maxInclusive ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:max-exclusive 5))
+                '(xs:maxExclusive ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:enumeration "blub"))
+                '(xs:enumeration ((value "blub"))))
+
+  (check-equal? (xs->xexpr (xs:pattern "blub"))
+                '(xs:pattern ((value "blub"))))
+
+  (check-equal? (xs->xexpr (xs:length 5))
+                '(xs:length ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:min-length 5))
+                '(xs:minLength ((value "5"))))
+
+  (check-equal? (xs->xexpr (xs:max-length 5))
+                '(xs:maxLength ((value "5"))))
+
   (check-equal? (xs->xexpr (xs:complex-type 'atype '()))
                 '(xs:complex-type ((name "atype"))))
 
@@ -317,6 +405,24 @@
                 '(xs:attribute ((name    "prodid")
                                 (type    "xs:string")
                                 (use     "required"))))
-  )
+
+  (check-equal? (xs->xexpr (xs:sequence 1 1 '()))
+                '(xs:sequence ()))
+
+  (check-equal? (xs->xexpr (xs:sequence 2 3 (list a-element)))
+                (list 'xs:sequence '((minOccurs "2") (maxOccurs "3")) x-element))
+
+  (check-equal? (xs->xexpr (xs:all 1 1 '()))
+                '(xs:all ()))
+
+  (check-equal? (xs->xexpr (xs:all 2 3 (list a-element)))
+                (list 'xs:all '((minOccurs "2") (maxOccurs "3")) x-element))
+
+  (check-equal? (xs->xexpr (xs:choice 1 1 '()))
+                '(xs:choice ()))
+
+  (check-equal? (xs->xexpr (xs:choice 2 3 (list a-element)))
+                (list 'xs:choice '((minOccurs "2") (maxOccurs "3")) x-element))
+)
      
 
