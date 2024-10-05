@@ -2,7 +2,7 @@
 
 (require
   (only-in racket/match
-           define/match)
+           match)
   (only-in typed/xml
            XExpr)
   "xml-aux.rkt"
@@ -22,83 +22,95 @@
 (struct wsdl:definitions
   ([target-namespace : String]
    [import-list      : (Listof (Pairof Symbol (U xs:import xs:schema)))]
-   [body             : (Listof wsdl:definitions-member)]))
+   [body             : (Listof (Pairof Symbol wsdl:definitions-member))]))
 
 (define-type wsdl:definitions-member
-  (U wsdl:message wsdl:port-type))
+  (U wsdl:message
+     wsdl:port-type))
 
 (define-predicate wsdl:definitions-member?
   wsdl:definitions-member)
 
 (struct wsdl:message
-  ([name      : Symbol]
-   [part-list : (Listof wsdl:part)]))
+  ([part-list : (Listof (Pairof Symbol wsdl:part))]))
 
 (struct wsdl:part
-  ([name : Symbol]
-   [type : (-> qname)]))
+  ([type : (-> qname)]))
 
 (struct wsdl:port-type
-  ([name : Symbol]
-   [operation-list : (Listof wsdl:operation)]))
+  ([operation-list : (Listof (Pairof Symbol wsdl:operation))]))
 
 (struct wsdl:operation
-  ([name   : Symbol]
-   [input  : (U #f (-> qname))]
+  ([input  : (U #f (-> qname))]
    [output : (U #f (-> qname))]
    [fault  : (U #f (-> qname))]))
 
-(: wsdl->xexpr (-> Any XExpr))
-(define/match (wsdl->xexpr x)
+(: wsdl->xexpr (->* (Any) (#:name-value (U #f Symbol)) XExpr))
+(define (wsdl->xexpr x #:name-value (name-value #f))
 
-  [((wsdl:definitions target-namespace import-list body))
-   (let ([a-prefix-list (get-import-attribute-list import-list)]
-         [b-prefix-list (list (cons (wsdl-prefix) "http://schemas.xmlsoap.org/wsdl/")
-                              (cons (tns-prefix)  target-namespace))])
+  (match x
+
+    [(cons (? symbol? name) elem)
+     (wsdl->xexpr elem #:name-value name)]
+
+    ;; wsdl:definitions
+    [(wsdl:definitions target-namespace import-list body)
+     (let ([a-prefix-list : (Listof (Pairof Symbol String))
+                          (get-import-attribute-list import-list)]
+           [b-prefix-list : (Listof (Pairof Symbol String))
+                          (list (cons (wsdl-prefix) "http://schemas.xmlsoap.org/wsdl/")
+                                (cons (tns-prefix)  target-namespace))]
+           [a-body : (Listof XExpr)
+                   (get-import-xexpr-list import-list ((wsdl import)))]
+           [b-body : (Listof XExpr)
+                   (map wsdl->xexpr body)])
+       (make-xml-element
+        ((wsdl definitions))
+        #:prefix-list (append a-prefix-list b-prefix-list)
+        #:att-list    (list (cons 'targetNamespace target-namespace))
+        #:body        (append a-body b-body)))] 
+
+    ;; wsdl:message
+    [(wsdl:message part-list)
      (make-xml-element
-      ((wsdl definitions))
-      #:prefix-list (append a-prefix-list b-prefix-list)
-      (list (cons 'targetNamespace target-namespace))
-      (append (get-import-xexpr-list import-list ((wsdl import)))
-              (map wsdl->xexpr body))))]
+      ((wsdl message))
+      #:name-value name-value
+      #:body       (map wsdl->xexpr part-list))]
 
-  [((wsdl:message name part-list))
-   (make-xml-element
-    ((wsdl message))
-    (list (cons 'name (symbol->string name)))
-    (map wsdl->xexpr part-list))]
-
-  [((wsdl:part name type))
-   (make-xml-element
-    ((wsdl part))
-    (list (cons 'name (symbol->string name))
-          (cons 'type (qname->string (type)))))]
-
-  [((wsdl:port-type name operation-list))
-   (make-xml-element
-    ((wsdl portType))
-    (list (cons 'name (symbol->string name)))
-    (map wsdl->xexpr operation-list))]
-
-  [((wsdl:operation name input output fault))
-   (let ([input-list : (Listof XExpr)
-                     (if input
-                         (list (make-xml-element ((wsdl input)) (list (cons 'message (qname->string (input))))))
-                         '())]
-         [output-list : (Listof XExpr)
-                      (if output
-                          (list (make-xml-element ((wsdl output)) (list (cons 'message (qname->string (output))))))
-                          '())]
-         [fault-list : (Listof XExpr)
-                     (if fault
-                         (list (make-xml-element ((wsdl fault)) (list (cons 'message (qname->string (fault))))))
-                         '())])
-
+    ;; wsdl:part
+    [(wsdl:part type)
      (make-xml-element
-      ((wsdl operation))
-      (list (cons 'name (symbol->string name)))
-      (append
-       input-list
-       output-list
-       fault-list)))])
+      ((wsdl part))
+      #:name-value name-value
+      #:att-list (list (cons 'type (qname->string (type)))))]
+
+    ;; wsdl:port-type
+    [(wsdl:port-type operation-list)
+     (make-xml-element
+      ((wsdl portType))
+      #:name-value name-value
+      #:body       (map wsdl->xexpr operation-list))]
+
+    ;; wsdl:operation
+    [(wsdl:operation input output fault)
+     (let ([input-list : (Listof XExpr)
+                       (if input
+                           (list (make-xml-element ((wsdl input)) #:att-list (list (cons 'message (qname->string (input))))))
+                           '())]
+           [output-list : (Listof XExpr)
+                        (if output
+                            (list (make-xml-element ((wsdl output)) #:att-list (list (cons 'message (qname->string (output))))))
+                            '())]
+           [fault-list : (Listof XExpr)
+                       (if fault
+                           (list (make-xml-element ((wsdl fault)) #:att-list (list (cons 'message (qname->string (fault))))))
+                           '())])
+
+       (make-xml-element
+        ((wsdl operation))
+        #:name-value name-value
+        #:body       (append
+                      input-list
+                      output-list
+                      fault-list)))]))
 

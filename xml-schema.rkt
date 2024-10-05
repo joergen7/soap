@@ -2,11 +2,10 @@
 
 (require
   (only-in racket/match
-           define/match)
+           define/match
+           match)
   (only-in typed/xml
            XExpr)
-  (only-in racket/match
-           match)
   (only-in racket/set
            set
            set-add)
@@ -86,7 +85,7 @@
 (struct xs:schema
   ([target-namespace : String]
    [import-list      : (Listof (Pairof Symbol (U xs:import xs:schema)))]
-   [body             : (Listof xs:schema-member)]))
+   [body             : (Listof (Pairof Symbol xs:schema-member))]))
 
 (define-type xs:schema-member
   (U xs:element
@@ -101,16 +100,14 @@
    [provide-set : (Setof Symbol)]))
 
 (struct xs:element
-  ([name       : Symbol]
-   [type       : (-> qname)]
+  ([type       : (-> qname)]
    [min-occurs : Nonnegative-Integer]
    [max-occurs : (U #f Nonnegative-Integer)]))
 
 ;; simple-type
 
 (struct xs:simple-type
-  ([name : Symbol]
-   [base : (-> qname)]
+  ([base : (-> qname)]
    [body : (Listof xs:simple-type-member)]))
 
 (define-type xs:simple-type-member
@@ -155,14 +152,12 @@
   ([value : Nonnegative-Integer]))
 
 ;; complex type
-
 (struct xs:complex-type
-  ([name : Symbol]
-   [body : (Listof xs:complex-type-member)]))
+  ([attribute-list : (Listof (Pairof Symbol xs:attribute))]
+   [body           : xs:complex-type-member]))
 
 (define-type xs:complex-type-member
-  (U xs:attribute
-     xs:sequence
+  (U xs:sequence
      xs:all
      xs:choice))
 
@@ -170,31 +165,30 @@
   xs:complex-type-member)
 
 (struct xs:attribute
-  ([name     : Symbol]
-   [type     : (-> qname)]
+  ([type     : (-> qname)]
    [required : Boolean]))
 
 (struct xs:sequence
-  ([body       : (Listof xs:element)]))
+  ([body : (Listof (Pairof Symbol xs:element))]))
 
 (struct xs:all
-  ([body       : (Listof xs:element)]))
+  ([body : (Listof (Pairof Symbol xs:element))]))
 
 (struct xs:choice
   ([min-occurs : Nonnegative-Integer]
    [max-occurs : (U #f Nonnegative-Integer)]
-   [body : (Listof xs:element)]))
+   [body       : (Listof (Pairof Symbol xs:element))]))
 
 
 (: get-provide-set (-> (U xs:import xs:schema) (Setof Symbol)))
 (define/match (get-provide-set o)
   [((xs:schema _target-namespace _import-list body))
    (for/fold ([result : (Setof Symbol) (set)])
-             ([x : xs:schema-member (in-list body)])
-     (match x
-       [(xs:element _name _type _min-occurs _max-occurs) result]
-       [(xs:simple-type name _base _body)                (set-add result name)]
-       [(xs:complex-type name _body)                     (set-add result name)]))]
+             ([p : (Pairof Symbol xs:schema-member) (in-list body)])
+     (match p
+       [(cons _name (xs:element _type _min-occurs _max-occurs)) result]
+       [(cons name  (xs:simple-type _base _body))               (set-add result name)]
+       [(cons name  (xs:complex-type _attribute-list _body))    (set-add result name)]))]
   [((xs:import _namespace provide-set))
    provide-set])
 
@@ -229,10 +223,13 @@
         #:att-list (list (cons 'namespace target-namespace)))])))
   
 
-(: xs->xexpr (->* (Any) ((U #f Symbol)) XExpr))
-(define (xs->xexpr x (name-value #f))
+(: xs->xexpr (->* (Any) (#:name-value (U #f Symbol)) XExpr))
+(define (xs->xexpr x #:name-value (name-value #f))
 
   (match x
+
+    [(cons (? symbol? name) elem)
+     (xs->xexpr elem #:name-value name)]
     
     ;; xs:schema
     [(xs:schema target-namespace import-list body)
@@ -255,31 +252,27 @@
         #:body        (append import-list body-list)))]
 
   ;; xs:element
-    [(xs:element name type min-occurs max-occurs)
+    [(xs:element type min-occurs max-occurs)
      (let ([occur-list : (Listof (Pairof Symbol String))
                        (get-occur-list min-occurs max-occurs)]
-           [name-list : (Listof (Pairof Symbol String))
-                      (list (cons 'name (symbol->string name)))]
            [type-list : (Listof (Pairof Symbol String))
                       (list (cons 'type (qname->string (type))))])
        (make-xml-element
         ((xs element))
         #:att-list   (append
-                      name-list
                       type-list
                       occur-list)
         #:name-value name-value))]
 
     ;; xs:simple-type
-    [(xs:simple-type name base body)
+    [(xs:simple-type base body)
      (make-xml-element
       ((xs simpleType))
-      #:att-list (list (cons 'name (symbol->string name)))
+      #:name-value name-value
       #:body (list
               (make-xml-element
                ((xs restriction))
                #:att-list   (list (cons 'base (qname->string (base))))
-               #:name-value name-value
                #:body       (map xs->xexpr body))))]
     
     ;; xs:min-inclusive
@@ -337,18 +330,17 @@
       #:att-list (list (cons 'value (number->string value))))]
 
     ;; xs:complex-type
-    [(xs:complex-type name body)
+    [(xs:complex-type attribute-list body)
      (make-xml-element
       ((xs complex-type))
-      #:att-list   (list (cons 'name (symbol->string name)))
       #:name-value name-value
-      #:body       (map xs->xexpr body))]
+      #:body (append
+              (map xs->xexpr attribute-list)
+              (list (xs->xexpr body))))]
 
     ;; xs:attribute
-    [(xs:attribute name type required)
-     (let ([name-list : (Listof (Pairof Symbol String))
-                      (list (cons 'name (symbol->string name)))]
-           [type-list : (Listof (Pairof Symbol String))
+    [(xs:attribute type required)
+     (let ([type-list : (Listof (Pairof Symbol String))
                       (list (cons 'type (qname->string (type))))]
            [required-list : (Listof (Pairof Symbol String))
                           (if required
@@ -357,7 +349,6 @@
        (make-xml-element
         ((xs attribute))
         #:att-list   (append
-                      name-list
                       type-list
                       required-list)
         #:name-value name-value))]
@@ -399,12 +390,12 @@
   (require typed/rackunit)
   
   (define a-element : xs:element
-    (xs:element 'value xs:string 1 1))
+    (xs:element xs:string 1 1))
 
   (define x-element : XExpr
     '(xs:element ((name "value") (type "xs:string") (minOccurs "1") (maxOccurs "1"))))
 
-  (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" '() (list a-element)))
+  (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" '() (list (cons 'value a-element))))
                 (list 'xs:schema '((xmlns:xs           "http://www.w3.org/2001/XMLSchema")
                                    (xmlns:tns          "urn:target-namespace")
                                    (targetNamespace    "urn:target-namespace")
@@ -413,7 +404,7 @@
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace"
                                       (list (cons 'blub (xs:import "urn:bla" (set))))
-                                      (list a-element)))
+                                      (list (cons 'value a-element))))
                 (list 'xs:schema '((xmlns:xs           "http://www.w3.org/2001/XMLSchema")
                                    (xmlns:tns          "urn:target-namespace")
                                    (xmlns:blub         "urn:bla")
@@ -424,37 +415,37 @@
 
   (check-equal? (parameterize ([xs-prefix 'xsd]
                                [tns-prefix 't])
-                  (xs->xexpr (xs:schema "urn:target-namespace" '() (list a-element))))
+                  (xs->xexpr (xs:schema "urn:target-namespace" '() (list (cons 'value a-element)))))
                   (list 'xsd:schema '((xmlns:xsd          "http://www.w3.org/2001/XMLSchema")
                                       (xmlns:t            "urn:target-namespace")
                                       (targetNamespace    "urn:target-namespace")
                                       (elementFormDefault "qualified"))
                         '(xsd:element ((name "value") (type "xsd:string") (minOccurs "1") (maxOccurs "1")))))
 
-  (check-equal? (xs->xexpr a-element)
+  (check-equal? (xs->xexpr a-element #:name-value 'value)
                 x-element)
 
-  (check-equal? (xs->xexpr (xs:element 'blub (tns mytype) 2 3))
+  (check-equal? (xs->xexpr (xs:element (tns mytype) 2 3) #:name-value 'blub)
                 '(xs:element ((name      "blub")
                               (type      "tns:mytype")
                               (minOccurs "2")
                               (maxOccurs "3"))))
 
-  (let ([element (xs:element 'blub (tns mytype) 2 3)])
+  (let ([element (xs:element (tns mytype) 2 3)])
     (check-equal? (parameterize ([xs-prefix 'xsd]
                                  [tns-prefix 'tanaspa])
-                    (xs->xexpr element))
+                    (xs->xexpr element #:name-value 'blub))
                   '(xsd:element ((name      "blub")
                                  (type      "tanaspa:mytype")
                                  (minOccurs "2")
                                  (maxOccurs "3")))))
 
 
-  (check-equal? (xs->xexpr (xs:simple-type 'atype xs:string '()))
+  (check-equal? (xs->xexpr (xs:simple-type xs:string '()) #:name-value 'atype)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string")))))
   
-  (check-equal? (xs->xexpr (xs:simple-type 'atype xs:string (list (xs:enumeration "bla"))))
+  (check-equal? (xs->xexpr (xs:simple-type xs:string (list (xs:enumeration "bla"))) #:name-value 'atype)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string"))
                                                 (xs:enumeration ((value "bla"))))))
@@ -486,21 +477,21 @@
   (check-equal? (xs->xexpr (xs:max-length 5))
                 '(xs:maxLength ((value "5"))))
 
-  (check-equal? (xs->xexpr (xs:complex-type 'atype '()))
-                '(xs:complex-type ((name "atype"))))
+  (check-equal? (xs->xexpr (xs:complex-type '() (xs:all '())) #:name-value 'atype)
+                '(xs:complex-type ((name "atype")) (xs:all ())))
 
   (check-equal? (xs->xexpr
-                 (xs:complex-type 'atype
-                                  (list (xs:attribute 'prodid xs:string #f))))
+                 (xs:complex-type (list (cons 'prodid (xs:attribute xs:string #f))) (xs:all '())) #:name-value 'atype)
                 '(xs:complex-type ((name "atype"))
                                   (xs:attribute ((name "prodid")
-                                                 (type "xs:string")))))
+                                                 (type "xs:string")))
+                                  (xs:all ())))
 
-  (check-equal? (xs->xexpr (xs:attribute 'prodid xs:string #f))
+  (check-equal? (xs->xexpr (xs:attribute xs:string #f) #:name-value 'prodid)
                 '(xs:attribute ((name "prodid")
                                 (type "xs:string"))))
 
-  (check-equal? (xs->xexpr (xs:attribute 'prodid xs:string #t))
+  (check-equal? (xs->xexpr (xs:attribute xs:string #t) #:name-value 'prodid)
                 '(xs:attribute ((name    "prodid")
                                 (type    "xs:string")
                                 (use     "required"))))
@@ -508,19 +499,19 @@
   (check-equal? (xs->xexpr (xs:sequence '()))
                 '(xs:sequence ()))
 
-  (check-equal? (xs->xexpr (xs:sequence (list a-element)))
+  (check-equal? (xs->xexpr (xs:sequence (list (cons 'value a-element))))
                 (list 'xs:sequence '() x-element))
 
   (check-equal? (xs->xexpr (xs:all '()))
                 '(xs:all ()))
 
-  (check-equal? (xs->xexpr (xs:all (list a-element)))
+  (check-equal? (xs->xexpr (xs:all (list (cons 'value a-element))))
                 (list 'xs:all '() x-element))
 
   (check-equal? (xs->xexpr (xs:choice 1 1 '()))
                 '(xs:choice ((minOccurs "1") (maxOccurs "1"))))
 
-  (check-equal? (xs->xexpr (xs:choice 2 3 (list a-element)))
+  (check-equal? (xs->xexpr (xs:choice 2 3 (list (cons 'value a-element))))
                 (list 'xs:choice '((minOccurs "2") (maxOccurs "3")) x-element))
 
   (check-equal? (get-provide-set (xs:schema "urn:target-namespace" '() '()))
@@ -528,14 +519,14 @@
 
   (check-equal? (get-provide-set (xs:schema "urn:target-namespace" '()
                                                   (list
-                                                   (xs:element 'bla xs:string 1 1))))
+                                                   (cons 'bla (xs:element xs:string 1 1)))))
                 (set))
 
   (check-equal? (get-provide-set (xs:schema "urn:target-namespace" '()
                                                   (list
-                                                   (xs:element 'bla xs:string 1 1)
-                                                   (xs:simple-type 'blub xs:string '())
-                                                   (xs:complex-type 'foo '()))))
+                                                   (cons 'bla (xs:element xs:string 1 1))
+                                                   (cons 'blub (xs:simple-type xs:string '()))
+                                                   (cons 'foo (xs:complex-type '() (xs:all '()))))))
                 (set 'foo 'blub))
 
   )
