@@ -21,7 +21,7 @@
 
 (struct wsdl:definitions
   ([target-namespace : String]
-   [import-list      : (Listof (U xs:import (Pairof Symbol xs:schema)))]
+   [import-list      : (Listof (Pairof Symbol (U xs:import xs:schema)))]
    [body             : (Listof wsdl:definitions-member)]))
 
 (define-type wsdl:definitions-member

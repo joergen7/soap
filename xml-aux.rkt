@@ -35,10 +35,17 @@
 (define (qname->symbol qn)
   (string->symbol (qname->string qn)))
 
-(: make-xml-element (->* (qname (Listof (Pairof Symbol String)))
-                         (#:prefix-list (Listof (Pairof Symbol String)) (Listof XExpr))
+(: make-xml-element (->* (qname)
+                         (#:prefix-list (Listof (Pairof Symbol String))
+                          #:att-list    (Listof (Pairof Symbol String))
+                          #:name-value  (U #f Symbol)
+                          #:body        (Listof XExpr))
                          XExpr))
-(define (make-xml-element name att-list #:prefix-list (prefix-list '()) (body '()))
+(define (make-xml-element name
+                          #:prefix-list (prefix-list '())
+                          #:att-list    (att-list    '())
+                          #:name-value  (name-value  #f)
+                          #:body        (body        '()))
 
   (: proc-prefix (-> (Pairof Symbol String) (List Symbol String)))
   (define (proc-prefix p)
@@ -49,8 +56,12 @@
     (list (car p) (cdr p)))
 
   (define z : (Listof (List Symbol String))
-    (append (map proc-prefix prefix-list)
-            (map proc-att att-list)))
+    (append
+     (if name-value
+         (list (list 'name (symbol->string name-value)))
+         '())
+     (map proc-prefix prefix-list)
+     (map proc-att att-list)))
 
   (define a : (Pairof (Listof (List Symbol String)) (Listof XExpr))
     (cons z body))

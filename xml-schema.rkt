@@ -26,7 +26,6 @@
  xs:schema-member
  xs:schema-member?
  (struct-out xs:import)
- get-provide-set
  (struct-out xs:element)
  (struct-out xs:simple-type)
  xs:simple-type-member
@@ -47,6 +46,7 @@
  (struct-out xs:sequence)
  (struct-out xs:all)
  (struct-out xs:choice)
+ get-provide-set
  get-import-attribute-list
  get-import-xexpr-list
  xs->xexpr
@@ -85,7 +85,7 @@
 
 (struct xs:schema
   ([target-namespace : String]
-   [import-list      : (Listof (U xs:import (Pairof Symbol xs:schema)))]
+   [import-list      : (Listof (Pairof Symbol (U xs:import xs:schema)))]
    [body             : (Listof xs:schema-member)]))
 
 (define-type xs:schema-member
@@ -95,22 +95,9 @@
 
 (define-predicate xs:schema-member?
   xs:schema-member)
-
-(: get-provide-set (-> (U xs:import xs:schema) (Setof Symbol)))
-(define/match (get-provide-set o)
-  [((xs:schema _target-namespace _import-list body))
-   (for/fold ([result : (Setof Symbol) (set)])
-             ([x : xs:schema-member (in-list body)])
-     (match x
-       [(xs:element _name _type _min-occurs _max-occurs) result]
-       [(xs:simple-type name _base _body)                (set-add result name)]
-       [(xs:complex-type name _body)                     (set-add result name)]))]
-  [((xs:import _prefix _namespace provide-set))
-   provide-set])
        
 (struct xs:import
-  ([prefix      : Symbol]
-   [namespace   : String]
+  ([namespace   : String]
    [provide-set : (Setof Symbol)]))
 
 (struct xs:element
@@ -199,6 +186,18 @@
    [body : (Listof xs:element)]))
 
 
+(: get-provide-set (-> (U xs:import xs:schema) (Setof Symbol)))
+(define/match (get-provide-set o)
+  [((xs:schema _target-namespace _import-list body))
+   (for/fold ([result : (Setof Symbol) (set)])
+             ([x : xs:schema-member (in-list body)])
+     (match x
+       [(xs:element _name _type _min-occurs _max-occurs) result]
+       [(xs:simple-type name _base _body)                (set-add result name)]
+       [(xs:complex-type name _body)                     (set-add result name)]))]
+  [((xs:import _namespace provide-set))
+   provide-set])
+
 (: get-occur-list (-> Nonnegative-Integer (U #f Nonnegative-Integer) (Listof (Pairof Symbol String))))
 (define (get-occur-list min-occurs max-occurs)
   (let ([l1 : (Listof (Pairof Symbol String))
@@ -207,176 +206,180 @@
             (list (cons 'maxOccurs (if max-occurs (number->string max-occurs) "unbounded")))])
     (append l1 l2)))
 
-(: get-import-attribute-list (-> (Listof (U xs:import (Pairof Symbol xs:schema))) (Listof (Pairof Symbol String))))
+(: get-import-attribute-list (-> (Listof (Pairof Symbol (U xs:import xs:schema))) (Listof (Pairof Symbol String))))
 (define (get-import-attribute-list import-list)
-  (for/list ([imp : (U xs:import (Pairof Symbol xs:schema)) (in-list import-list)])
+  (for/list ([imp : (Pairof Symbol (U xs:import xs:schema)) (in-list import-list)])
     (match imp
-      [(xs:import prefix namespace _)
+      [(cons prefix (xs:import namespace _provide-set))
        (cons prefix namespace)]
       [(cons prefix (xs:schema target-namespace _import-list _body))
        (cons prefix target-namespace)])))
 
-(: get-import-xexpr-list (-> (Listof (U xs:import (Pairof Symbol xs:schema))) qname (Listof XExpr)))
+(: get-import-xexpr-list (-> (Listof (Pairof Symbol (U xs:import xs:schema))) qname (Listof XExpr)))
 (define (get-import-xexpr-list import-list qn)
-  (for/list ([imp : (U xs:import (Pairof Symbol xs:schema)) (in-list import-list)])
+  (for/list ([imp : (Pairof Symbol (U xs:import xs:schema)) (in-list import-list)])
     (match imp
-      [(xs:import _prefix namespace _)
+      [(cons _prefix (xs:import namespace _))
        (make-xml-element
         qn
-        (list (cons 'namespace namespace)))]
+        #:att-list (list (cons 'namespace namespace)))]
       [(cons prefix (xs:schema target-namespace _import-list _body))
        (make-xml-element
         qn
-        (list (cons 'namespace target-namespace)))])))
+        #:att-list (list (cons 'namespace target-namespace)))])))
   
 
-(: xs->xexpr (-> Any XExpr))
-(define/match (xs->xexpr x)
+(: xs->xexpr (->* (Any) ((U #f Symbol)) XExpr))
+(define (xs->xexpr x (name-value #f))
 
-  ;; xs:schema
-  [((xs:schema target-namespace import-list body))
-   (let ([a-prefix-list : (Listof (Pairof Symbol String))
-                        (get-import-attribute-list import-list)]
-         [b-prefix-list : (Listof (Pairof Symbol String))
-                        (list (cons (xs-prefix) "http://www.w3.org/2001/XMLSchema")
-                              (cons (tns-prefix) target-namespace))]
-         [att-list : (Listof (Pairof Symbol String))
-                   (list (cons 'targetNamespace target-namespace)
-                         (cons 'elementFormDefault "qualified"))]
-         [import-list : (Listof XExpr)
-                      (get-import-xexpr-list import-list ((xs import)))]
-         [body-list : (Listof XExpr)
-                    (map xs->xexpr body)])
-     (make-xml-element
-      ((xs schema))
-      #:prefix-list (append b-prefix-list a-prefix-list)
-      att-list
-      (append import-list body-list)))]
+  (match x
+    
+    ;; xs:schema
+    [(xs:schema target-namespace import-list body)
+     (let ([a-prefix-list : (Listof (Pairof Symbol String))
+                          (get-import-attribute-list import-list)]
+           [b-prefix-list : (Listof (Pairof Symbol String))
+                          (list (cons (xs-prefix) "http://www.w3.org/2001/XMLSchema")
+                                (cons (tns-prefix) target-namespace))]
+           [att-list : (Listof (Pairof Symbol String))
+                     (list (cons 'targetNamespace target-namespace)
+                           (cons 'elementFormDefault "qualified"))]
+           [import-list : (Listof XExpr)
+                        (get-import-xexpr-list import-list ((xs import)))]
+           [body-list : (Listof XExpr)
+                      (map xs->xexpr body)])
+       (make-xml-element
+        ((xs schema))
+        #:prefix-list (append b-prefix-list a-prefix-list)
+        #:att-list    att-list
+        #:body        (append import-list body-list)))]
 
   ;; xs:element
-  [((xs:element name type min-occurs max-occurs))
-   (let ([occur-list : (Listof (Pairof Symbol String))
-                     (get-occur-list min-occurs max-occurs)]
-         [name-list : (Listof (Pairof Symbol String))
-                    (list (cons 'name (symbol->string name)))]
-         [type-list : (Listof (Pairof Symbol String))
-                    (list (cons 'type (qname->string (type))))])
-   (make-xml-element
-    ((xs element))
-    (append
-     name-list
-     type-list
-     occur-list)))]
+    [(xs:element name type min-occurs max-occurs)
+     (let ([occur-list : (Listof (Pairof Symbol String))
+                       (get-occur-list min-occurs max-occurs)]
+           [name-list : (Listof (Pairof Symbol String))
+                      (list (cons 'name (symbol->string name)))]
+           [type-list : (Listof (Pairof Symbol String))
+                      (list (cons 'type (qname->string (type))))])
+       (make-xml-element
+        ((xs element))
+        #:att-list   (append
+                      name-list
+                      type-list
+                      occur-list)
+        #:name-value name-value))]
 
-  ;; xs:simple-type
-  [((xs:simple-type name base body))
-   (make-xml-element
-    ((xs simpleType))
-    (list (cons 'name (symbol->string name)))
-     (list
-      (make-xml-element
-       ((xs restriction))
-       (list (cons 'base (qname->string (base))))
-       (map xs->xexpr body))))]
-
-  ;; xs:min-inclusive
-  [((xs:min-inclusive value))
-   (make-xml-element
-    ((xs minInclusive))
-    (list (cons 'value (number->string value))))]
-  
-  ;; xs:min-exclusive
-  [((xs:min-exclusive value))
-   (make-xml-element
-    ((xs minExclusive))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:max-inclusive
-  [((xs:max-inclusive value))
-   (make-xml-element
-    ((xs maxInclusive))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:max-exclusive
-  [((xs:max-exclusive value))
-   (make-xml-element
-    ((xs maxExclusive))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:enumeration
-  [((xs:enumeration value))
-   (make-xml-element
-    ((xs enumeration))
-    (list (cons 'value value)))]
-
-  ;; xs:pattern
-  [((xs:pattern value))
-   (make-xml-element
-    ((xs pattern))
-    (list (cons 'value value)))]
-
-  ;; xs:length
-  [((xs:length value))
-   (make-xml-element
-    ((xs length))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:min-length
-  [((xs:min-length value))
-   (make-xml-element
-    ((xs minLength))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:max-length
-  [((xs:max-length value))
-   (make-xml-element
-    ((xs maxLength))
-    (list (cons 'value (number->string value))))]
-
-  ;; xs:complex-type
-  [((xs:complex-type name body))
-   (make-xml-element
-    ((xs complex-type))
-    (list (cons 'name (symbol->string name)))
-    (map xs->xexpr body))]
-
-  ;; xs:attribute
-  [((xs:attribute name type required))
-   (let ([name-list : (Listof (Pairof Symbol String))
-                    (list (cons 'name (symbol->string name)))]
-         [type-list : (Listof (Pairof Symbol String))
-                    (list (cons 'type (qname->string (type))))]
-         [required-list : (Listof (Pairof Symbol String))
-                        (if required
-                            (list (cons 'use "required"))
-                            '())])
+    ;; xs:simple-type
+    [(xs:simple-type name base body)
      (make-xml-element
-      ((xs attribute))
-      (append
-       name-list
-       type-list
-       required-list)))]
+      ((xs simpleType))
+      #:att-list (list (cons 'name (symbol->string name)))
+      #:body (list
+              (make-xml-element
+               ((xs restriction))
+               #:att-list   (list (cons 'base (qname->string (base))))
+               #:name-value name-value
+               #:body       (map xs->xexpr body))))]
+    
+    ;; xs:min-inclusive
+    [(xs:min-inclusive value)
+     (make-xml-element
+      ((xs minInclusive))
+      #:att-list (list (cons 'value (number->string value))))]
+    
+    ;; xs:min-exclusive
+    [(xs:min-exclusive value)
+     (make-xml-element
+      ((xs minExclusive))
+      #:att-list (list (cons 'value (number->string value))))]
+    
+    ;; xs:max-inclusive
+    [(xs:max-inclusive value)
+     (make-xml-element
+      ((xs maxInclusive))
+      #:att-list (list (cons 'value (number->string value))))]
 
-  ;; xs:sequence
-  [((xs:sequence body))
-   (make-xml-element
-    ((xs sequence))
-    '()
-     (map xs->xexpr body))]
+    ;; xs:max-exclusive
+    [(xs:max-exclusive value)
+     (make-xml-element
+      ((xs maxExclusive))
+      #:att-list (list (cons 'value (number->string value))))]
+    
+    ;; xs:enumeration
+    [(xs:enumeration value)
+     (make-xml-element
+      ((xs enumeration))
+      #:att-list (list (cons 'value value)))]
 
-  ;; xs:all
-  [((xs:all body))
-   (make-xml-element
-    ((xs all))
-    '()
-    (map xs->xexpr body))]
+    ;; xs:pattern
+    [(xs:pattern value)
+     (make-xml-element
+      ((xs pattern))
+      #:att-list (list (cons 'value value)))]
 
-;; xs:choice
-  [((xs:choice min-occurs max-occurs body))
-   (make-xml-element
-    ((xs choice))
-    (get-occur-list min-occurs max-occurs)
-    (map xs->xexpr body))])
+    ;; xs:length
+    [(xs:length value)
+     (make-xml-element
+      ((xs length))
+      #:att-list (list (cons 'value (number->string value))))]
+
+    ;; xs:min-length
+    [(xs:min-length value)
+     (make-xml-element
+      ((xs minLength))
+      #:att-list (list (cons 'value (number->string value))))]
+
+    ;; xs:max-length
+    [(xs:max-length value)
+     (make-xml-element
+      ((xs maxLength))
+      #:att-list (list (cons 'value (number->string value))))]
+
+    ;; xs:complex-type
+    [(xs:complex-type name body)
+     (make-xml-element
+      ((xs complex-type))
+      #:att-list   (list (cons 'name (symbol->string name)))
+      #:name-value name-value
+      #:body       (map xs->xexpr body))]
+
+    ;; xs:attribute
+    [(xs:attribute name type required)
+     (let ([name-list : (Listof (Pairof Symbol String))
+                      (list (cons 'name (symbol->string name)))]
+           [type-list : (Listof (Pairof Symbol String))
+                      (list (cons 'type (qname->string (type))))]
+           [required-list : (Listof (Pairof Symbol String))
+                          (if required
+                              (list (cons 'use "required"))
+                              '())])
+       (make-xml-element
+        ((xs attribute))
+        #:att-list   (append
+                      name-list
+                      type-list
+                      required-list)
+        #:name-value name-value))]
+
+    ;; xs:sequence
+    [(xs:sequence body)
+     (make-xml-element
+      ((xs sequence))
+      #:body (map xs->xexpr body))]
+    
+    ;; xs:all
+    [(xs:all body)
+     (make-xml-element
+      ((xs all))
+      #:body (map xs->xexpr body))]
+    
+    ;; xs:choice
+    [(xs:choice min-occurs max-occurs body)
+     (make-xml-element
+      ((xs choice))
+      #:att-list (get-occur-list min-occurs max-occurs)
+      #:body     (map xs->xexpr body))]))
 
 (: xs-validate-schema (-> xs:schema xs:schema))
 (define (xs-validate-schema schema)
@@ -409,7 +412,7 @@
                       x-element))
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace"
-                                      (list (xs:import 'blub "urn:bla" (set)))
+                                      (list (cons 'blub (xs:import "urn:bla" (set))))
                                       (list a-element)))
                 (list 'xs:schema '((xmlns:xs           "http://www.w3.org/2001/XMLSchema")
                                    (xmlns:tns          "urn:target-namespace")
