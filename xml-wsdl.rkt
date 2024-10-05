@@ -21,8 +21,8 @@
 
 (struct wsdl:definitions
   ([target-namespace : String]
-   [import-list      : (Listof (Pairof Symbol (U xs:import xs:schema)))]
-   [body             : (Listof (Pairof Symbol wsdl:definitions-member))]))
+   [import-table     : (HashTable Symbol (U xs:import xs:schema))]
+   [body             : (HashTable Symbol wsdl:definitions-member)]))
 
 (define-type wsdl:definitions-member
   (U wsdl:message
@@ -32,13 +32,13 @@
   wsdl:definitions-member)
 
 (struct wsdl:message
-  ([part-list : (Listof (Pairof Symbol wsdl:part))]))
+  ([part-list : (HashTable Symbol wsdl:part)]))
 
 (struct wsdl:part
   ([type : (-> qname)]))
 
 (struct wsdl:port-type
-  ([operation-list : (Listof (Pairof Symbol wsdl:operation))]))
+  ([operation-list : (HashTable Symbol wsdl:operation)]))
 
 (struct wsdl:operation
   ([input  : (U #f (-> qname))]
@@ -48,22 +48,24 @@
 (: wsdl->xexpr (->* (Any) (#:name-value (U #f Symbol)) XExpr))
 (define (wsdl->xexpr x #:name-value (name-value #f))
 
+
+  (: proc (-> Symbol Any XExpr))
+  (define (proc name elem)
+    (wsdl->xexpr elem #:name-value name))
+
   (match x
 
-    [(cons (? symbol? name) elem)
-     (wsdl->xexpr elem #:name-value name)]
-
     ;; wsdl:definitions
-    [(wsdl:definitions target-namespace import-list body)
+    [(wsdl:definitions target-namespace import-table body)
      (let ([a-prefix-list : (Listof (Pairof Symbol String))
-                          (get-import-attribute-list import-list)]
+                          (get-import-attribute-list import-table)]
            [b-prefix-list : (Listof (Pairof Symbol String))
                           (list (cons (wsdl-prefix) "http://schemas.xmlsoap.org/wsdl/")
                                 (cons (tns-prefix)  target-namespace))]
            [a-body : (Listof XExpr)
-                   (get-import-xexpr-list import-list ((wsdl import)))]
+                   (get-import-xexpr-list import-table ((wsdl import)))]
            [b-body : (Listof XExpr)
-                   (map wsdl->xexpr body)])
+                   (hash-map body proc)])
        (make-xml-element
         ((wsdl definitions))
         #:prefix-list (append a-prefix-list b-prefix-list)
@@ -75,7 +77,7 @@
      (make-xml-element
       ((wsdl message))
       #:name-value name-value
-      #:body       (map wsdl->xexpr part-list))]
+      #:body       (hash-map part-list proc))]
 
     ;; wsdl:part
     [(wsdl:part type)
@@ -89,7 +91,7 @@
      (make-xml-element
       ((wsdl portType))
       #:name-value name-value
-      #:body       (map wsdl->xexpr operation-list))]
+      #:body       (hash-map operation-list proc))]
 
     ;; wsdl:operation
     [(wsdl:operation input output fault)
