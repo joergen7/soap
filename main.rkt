@@ -1,4 +1,4 @@
-#lang racket/base
+#lang typed/racket/base
 
 (require
  (for-syntax
@@ -8,7 +8,19 @@
            syntax-parse
            boolean
            id
-           str))
+           str
+           integer
+           number))
+ (only-in typed/xml
+          xexpr->string
+          display-xml
+          document
+          prolog
+          xexpr->xml
+          element?
+          empty-tag-shorthand)
+ (only-in racket/set
+          set)
  "xml-aux.rkt"
  "xml-schema.rkt"
  "xml-wsdl.rkt")
@@ -20,22 +32,29 @@
  #%datum
  #%module-begin
  in-namespace
- define-schema
- import
- define-type
- unbounded
- all
- sequence
- choice
  (rename-out
-  [xs:min-inclusive min-inclusive]
-  [xs:min-exclusive min-exclusive]
-  [xs:max-inclusive max-inclusive]
-  [xs:max-exclusive max-exclusive]
-  [xs:pattern       pattern]
-  [xs:length        length]
-  [xs:min-length    min-length]
-  [xs:max-length    max-length]))
+  [display-xs:schema display-schema]
+  [define-xs:schema  define-schema]
+  [define-xs:type    define-schema-type]
+  [define-xs:import  import-schema]
+  [make-xs:schema    xs:schema]
+  [make-xs:import    xs:import]
+  [make-xs:type      xs:type]
+  [make-xs:all       xs:all]
+  [make-xs:sequence  xs:sequence]
+  [make-xs:choice    xs:choice])
+ unbounded
+ xs
+ tns
+ xs:min-inclusive
+ xs:min-exclusive
+ xs:max-inclusive
+ xs:max-exclusive
+ xs:pattern
+ xs:length
+ xs:min-length
+ xs:max-length
+ )
 
 
 ;; reader module
@@ -46,17 +65,16 @@
 
 ;; parameters
 
-(define a-namespace
+(define a-namespace : (Parameterof String)
   (make-parameter "urn:default"))
 
-(define a-import-table
-  (make-parameter (hash)))
+(define a-import-table : (Parameterof (HashTable Symbol (U xs:import xs:schema)))
+  (let ([t0 : (HashTable Symbol (U xs:import xs:schema)) (hash)])
+    (make-parameter t0)))
 
-(define a-schema-table
-  (make-parameter (hash)))
-
-(define a-type-table
-  (make-parameter (hash)))
+(define a-type-table : (Parameterof (HashTable Symbol xs:schema-member))
+  (let ([t0 : (HashTable Symbol xs:schema-member) (hash)])
+    (make-parameter t0)))
 
 
 ;; language extensions
@@ -76,105 +94,128 @@
     [(_ key:id value)
      #'(store a-import-table key value)]))
 
-(define-syntax (store-schema stx)
-  (syntax-parse stx
-    [(_ key:id value)
-     #'(store a-schema-table key value)]))
-
 (define-syntax (in-namespace stx)
   (syntax-parse stx
-    [(_ s:str e_i ...) #'(parameterize ([a-namespace s]) e_i ...)]))
+    [(_ s:str)
+     #'(a-namespace s)]))
 
-(define-syntax (define-schema stx)
+(define-syntax (define-xs:schema stx)
   (syntax-parse stx
     [(_ x:id e_i ...)
-     #'(store-schema
-        x
-        (parameterize ([a-import-table (hash)])
-          e_i ...))]))
+     #'(define x : xs:schema
+         (make-xs:schema e_i ...))]))
 
-(define-syntax (import stx)
+(define-syntax (make-xs:schema stx)
+  (syntax-parse stx
+    [(_ e_i ...)
+     #'(parameterize ([a-import-table (hash)]
+                      [a-type-table   (hash)])
+         e_i ...
+         (xs:schema
+          (a-namespace)
+          (a-import-table)
+          (a-type-table)))]))
+
+(define-syntax (define-xs:import stx)
+  (syntax-parse stx
+    
+    ;; local import
+    [(_ x:id a:id)
+     #'(store-import x a)]
+
+    ;; foreign import
+    [(_ x:id e ...)
+     #'(store-import x (make-xs:import e ...))]))
+
+
+(define-syntax (make-xs:import stx)
   (syntax-parse stx
     
     ;; foreign import without declarations
-    [(_ x:id s:str)
-     #'(import x s ())]
+    [(_ s:str)
+     #'(make-xs:import s ())]
     
     ;; Foreign import with declarations
-    [(import x:id s:str (a_i:id ...))
-     #'(store-import
-        x
-        (xs:import s (set 'a_i ...)))]
+    [(_ s:str (a_i:id ...))
+     #'(xs:import s (set 'a_i ...))]))
+        
 
-    ;; local import
-    [(import x:id a:id)
-     #'(store-import
-        x
-        (hash-ref (a-schema-table) 'a))]))
-
-(define-syntax (define-type stx)
+(define-syntax (define-xs:type stx)
   (syntax-parse stx
-    #:datum-literals (xs enum)
-    
-    ;; simple type with base type in target namespace
-    [(_ x:id base:id e_i ...)
+    [(_ x:id e_i ...)
      #'(store-type
         x
-        (xs:simple-type (tns base) (list e_i ...)))]
+        (make-xs:type e_i ...))]))
 
-    ;; simple type with base type in schema namespace
-    [(_ x:id (xs base:id) e_i ...)
-     #'(store-type
-        x
-        (xs:simple-type (xs base) (list e_i ...)))]
+
+(define-syntax (make-xs:type stx)
+  (syntax-parse stx
+    #:datum-literals (enum range)
+
+    ;; simple type
+    [(_ base e_i ...)
+     #'(xs:simple-type base (list e_i ...))]
+
+    ;; integer range
+    [(_ (range lo:integer hi:integer))
+     #'(xs:simple-type
+        xs:integer
+        (list (xs:min-inclusive lo)
+              (xs:max-inclusive hi)))]
+
+    ;; decimal range
+    [(_ (range lo:number hi:number))
+     #'(xs:simple-type
+        xs:decimal
+        (list (xs:min-inclusive lo)
+              (xs:max-inclusive hi)))]
 
     ;; enum
-    [(_ x:id (enum s_i:str ...))
-     #'(store-type
-        x
-        (xs:simple-type
-         xs:string
-         (list (xs:enumeration s_i) ...)))]
-    
+    [(_ (enum s_i:str ...))
+     #'(xs:simple-type
+        xs:string
+        (list (xs:enumeration s_i) ...))]
 
-    [(_ x:id ([a_i:id t_i:id r_i:boolean] ...) e)
-     #'(store-type
-        x
-        (xs:complex-type
-         (apply hash (append (list 'a_i (xs:attribute (tns t_i) r_i)) ...))
-         e))]
+    ;; complex type
+    [(_ ([a_i:id t_i:id r_i:boolean] ...) e)
+     #'(xs:complex-type
+        (apply hash (append (list 'a_i (xs:attribute (tns t_i) r_i)) ...))
+        e)]))
 
-    [(_ x:id ([a_i:id (xs t_i:id) r_i:boolean] ...) e)
-     #'(store-type
-        x
-       (xs:complex-type
-        (apply hash (append (list 'a_i (xs:attribute (xs t_i) r_i)) ...))
-        e))]))
-
-
-(define unbounded
-  #f)
-
-(define-syntax (all stx)
+(define-syntax (make-xs:all stx)
   (syntax-parse stx
-    [(_ (x_i:id t_i:id lo_i hi_i) ...)
+    [(_ (x_i:id e_i) ...)
      #'(xs:all
-        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+        (apply (append (list 'x_i e_i) ...)))]))
          
-(define-syntax (sequence stx)
+(define-syntax (make-xs:sequence stx)
   (syntax-parse stx
-    [(_ (x_i:id t_i:id lo_i hi_i) ...)
+    [(_ (x_i:id e_i) ...)
      #'(xs:sequence
-        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+        (apply (append (list 'x_i e_i) ...)))]))
          
-(define-syntax (choice stx)
+(define-syntax (make-xs:choice stx)
   (syntax-parse stx
-    [(_ lo hi (x_i:id t_i:id lo_i hi_i) ...)
+    [(_ lo hi (x_i:id e_i) ...)
      #'(xs:choice
         lo
         hi
-        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+        (apply (append (list 'x_i e_i) ...)))]))
          
+
+(define-syntax (display-xexpr stx)
+  (syntax-parse stx
+    [(_ e)
+     #'(parameterize ([empty-tag-shorthand 'always])
+         (display-xml
+          (document (prolog '() #f '())
+                    (assert (xexpr->xml e) element?)
+                    '())))]))
+
+(define-syntax (display-xs:schema stx)
+  (syntax-parse stx
+    ([_ e]
+     #'(display-xexpr (xs->xexpr e)))))
 
 ;; TODO
 ;; - proper error message on hash-ref flunk

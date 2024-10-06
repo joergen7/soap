@@ -22,6 +22,7 @@
  xs:date
  xs:time
  xs:date-time
+ unbounded
  (struct-out xs:schema)
  xs:schema-member
  xs:schema-member?
@@ -80,6 +81,9 @@
 
 (define xs:date-time
   (xs dateTime))
+
+(define unbounded
+  #f)
 
 ;; schema
 
