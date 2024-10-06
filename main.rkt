@@ -6,6 +6,7 @@
            syntax)
   (only-in syntax/parse
            syntax-parse
+           boolean
            id
            str))
  "xml-aux.rkt"
@@ -21,8 +22,11 @@
  in-namespace
  define-schema
  import
- define-simple-type
- define-enum
+ define-type
+ unbounded
+ all
+ sequence
+ choice
  (rename-out
   [xs:min-inclusive min-inclusive]
   [xs:min-exclusive min-exclusive]
@@ -108,33 +112,69 @@
         x
         (hash-ref (a-schema-table) 'a))]))
 
-(define-syntax (define-simple-type stx)
+(define-syntax (define-type stx)
   (syntax-parse stx
-
-    ;; reference base type in target namespace
+    #:datum-literals (xs enum)
+    
+    ;; simple type with base type in target namespace
     [(_ x:id base:id e_i ...)
      #'(store-type
         x
         (xs:simple-type (tns base) (list e_i ...)))]
 
-    ;; reference base type in schema namespace
+    ;; simple type with base type in schema namespace
     [(_ x:id (xs base:id) e_i ...)
      #'(store-type
         x
-        (xs:simple-type (xs base) (list e_i ...)))]))
+        (xs:simple-type (xs base) (list e_i ...)))]
 
-(define-syntax (define-enum stx)
-  (syntax-parse stx
-    [(_ x:id s_i:str ...)
+    ;; enum
+    [(_ x:id (enum s_i:str ...))
      #'(store-type
         x
         (xs:simple-type
          xs:string
-         (list (xs:enumeration s_i) ...)))]))
-          
+         (list (xs:enumeration s_i) ...)))]
     
 
+    [(_ x:id ([a_i:id t_i:id r_i:boolean] ...) e)
+     #'(store-type
+        x
+        (xs:complex-type
+         (apply hash (append (list 'a_i (xs:attribute (tns t_i) r_i)) ...))
+         e))]
 
+    [(_ x:id ([a_i:id (xs t_i:id) r_i:boolean] ...) e)
+     #'(store-type
+        x
+       (xs:complex-type
+        (apply hash (append (list 'a_i (xs:attribute (xs t_i) r_i)) ...))
+        e))]))
+
+
+(define unbounded
+  #f)
+
+(define-syntax (all stx)
+  (syntax-parse stx
+    [(_ (x_i:id t_i:id lo_i hi_i) ...)
+     #'(xs:all
+        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+         
+(define-syntax (sequence stx)
+  (syntax-parse stx
+    [(_ (x_i:id t_i:id lo_i hi_i) ...)
+     #'(xs:sequence
+        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+         
+(define-syntax (choice stx)
+  (syntax-parse stx
+    [(_ lo hi (x_i:id t_i:id lo_i hi_i) ...)
+     #'(xs:choice
+        lo
+        hi
+        (apply (append (list 'x_i (xs:element (tns t_i) lo_i hi_i)) ...)))]))
+         
 
 ;; TODO
 ;; - proper error message on hash-ref flunk
