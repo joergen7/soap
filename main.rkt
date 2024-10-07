@@ -46,10 +46,10 @@
   [xs:min-exclusive  min-exclusive]
   [xs:max-inclusive  max-inclusive]
   [xs:max-exclusive  max-exclusive]
-  [xs:pattern        pattern]       ; also in syntax/parse
-  [xs:length         length]        ; name-clash with length from racket/base
-  [xs:min-length     min-length]
-  [xs:max-length     max-length]
+  [xs:pattern        pattern]
+  [xs:length         len]
+  [xs:min-length     min-len]
+  [xs:max-length     max-len]
   [xs:element        element])
 
  range
