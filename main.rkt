@@ -3,7 +3,9 @@
 (require
  (for-syntax
   (only-in racket/base
-           syntax)
+           syntax
+           let
+           #%datum)
   (only-in syntax/parse
            syntax-parse
            boolean
@@ -35,25 +37,26 @@
  (rename-out
   [display-xs:schema display-schema]
   [define-xs:schema  define-schema]
-  [define-xs:type    define-schema-type]
-  [define-xs:import  import-schema]
-  [make-xs:schema    xs:schema]
-  [make-xs:import    xs:import]
-  [make-xs:type      xs:type]
-  [make-xs:all       xs:all]
-  [make-xs:sequence  xs:sequence]
-  [make-xs:choice    xs:choice])
+  [define-xs:type    define-type]
+  [define-xs:import  import]
+  [make-xs:all       all]
+  [make-xs:sequence  sequence]
+  [make-xs:choice    choice]
+  [xs:min-inclusive  min-inclusive]
+  [xs:min-exclusive  min-exclusive]
+  [xs:max-inclusive  max-inclusive]
+  [xs:max-exclusive  max-exclusive]
+  [xs:pattern        pattern]       ; also in syntax/parse
+  [xs:length         length]        ; name-clash with length from racket/base
+  [xs:min-length     min-length]
+  [xs:max-length     max-length]
+  [xs:element        element])
+
+ range
+ enum
  unbounded
  xs
  tns
- xs:min-inclusive
- xs:min-exclusive
- xs:max-inclusive
- xs:max-exclusive
- xs:pattern
- xs:length
- xs:min-length
- xs:max-length
  )
 
 
@@ -61,7 +64,6 @@
 
 (module reader syntax/module-reader
   soap)
-
 
 ;; parameters
 
@@ -147,61 +149,76 @@
         x
         (make-xs:type e_i ...))]))
 
+(: range (-> Real Real xs:simple-type))
+(define (range lo hi)
+  (xs:simple-type
+   (if (and (exact-integer? lo)
+            (exact-integer? hi))
+       xs:integer
+       xs:decimal)
+   (list (xs:min-inclusive lo)
+         (xs:max-inclusive hi))))
+
+(: enum (-> String * xs:simple-type))
+(define (enum . s-list)
+  (xs:simple-type
+   xs:string
+   (map xs:enumeration s-list)))
+
+(: make-xs:simple-type (-> (U (-> qname) xs:simple-type) xs:simple-type-member * xs:simple-type))
+(define (make-xs:simple-type head . tail)
+  (cond
+    [(xs:simple-type? head)
+     head]
+    [else
+     (xs:simple-type head tail)]))
+
+
+(define-syntax (make-attribute-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
+
+(define-syntax (make-element-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
 
 (define-syntax (make-xs:type stx)
   (syntax-parse stx
-    #:datum-literals (enum range)
-
-    ;; simple type
-    [(_ base e_i ...)
-     #'(xs:simple-type base (list e_i ...))]
-
-    ;; integer range
-    [(_ (range lo:integer hi:integer))
-     #'(xs:simple-type
-        xs:integer
-        (list (xs:min-inclusive lo)
-              (xs:max-inclusive hi)))]
-
-    ;; decimal range
-    [(_ (range lo:number hi:number))
-     #'(xs:simple-type
-        xs:decimal
-        (list (xs:min-inclusive lo)
-              (xs:max-inclusive hi)))]
-
-    ;; enum
-    [(_ (enum s_i:str ...))
-     #'(xs:simple-type
-        xs:string
-        (list (xs:enumeration s_i) ...))]
 
     ;; complex type
-    [(_ ([a_i:id t_i:id r_i:boolean] ...) e)
+    [(_ ((a_i:id t_i r_i:boolean) ...) e)
      #'(xs:complex-type
-        (apply hash (append (list 'a_i (xs:attribute (tns t_i) r_i)) ...))
-        e)]))
+        (make-attribute-table (a_i (xs:attribute t_i r_i)) ...)
+        e)]
+
+    ;; simple type
+    [(_ head e_i ...)
+     #'(make-xs:simple-type head e_i ...)]))
+
+
+                               
 
 (define-syntax (make-xs:all stx)
   (syntax-parse stx
-    [(_ (x_i:id e_i) ...)
+    [(_ r ...)
      #'(xs:all
-        (apply (append (list 'x_i e_i) ...)))]))
+        (make-element-table r ...))]))
          
 (define-syntax (make-xs:sequence stx)
   (syntax-parse stx
-    [(_ (x_i:id e_i) ...)
+    [(_ r ...)
      #'(xs:sequence
-        (apply (append (list 'x_i e_i) ...)))]))
+        (make-element-table r ...))]))
          
 (define-syntax (make-xs:choice stx)
   (syntax-parse stx
-    [(_ lo hi (x_i:id e_i) ...)
+    [(_ lo hi r ...)
      #'(xs:choice
         lo
         hi
-        (apply (append (list 'x_i e_i) ...)))]))
-         
+        (make-element-table r ...))]))
 
 (define-syntax (display-xexpr stx)
   (syntax-parse stx
