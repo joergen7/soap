@@ -47,13 +47,57 @@
     (enum "ok" "faulty" "foobar"))
 
   ;; complex type without attributes
-  (define-type myStruct
+  (define-type myStruct1
     ()
     (all
-     (id    (element (tns myStringType) 1 1))
-     (date  (element (xs date) 0 1))
-     (month (element (tns myOtherMonthType) 0 1))))
-)
+     (id    myStringType     1 1)
+     (date  (xs date)        0 unbounded)
+     (month myOtherMonthType 0 1)
+     ))
+
+  ;; complex type with attributes
+  (define-type myStruct2
+    ([att1 (xs string)  #f]
+     [att2 (xs integer) #t])
+    (sequence
+     (id    myStringType     1 1)
+     (date  (xs date)        0 unbounded)
+     (month myOtherMonthType 0 1)
+     ))
+  )
+
+
+
+(define-service demo-service
+
+  (import types demo-schema)
+
+  (define-message error-message)
+    
+
+  (define-message op1-input-message
+    (body (: types myStruct)))
+  
+  (define-message op1-output-message
+    (body (: types state)))
+  
+
+  (define-message op2-input-message)
+  (define-message op2-output-message)
+
+  (define-interface firstInterface
+    
+    (op1 (operation op1-input-message
+                    op1-output-message
+                    error-message))
+    
+    (op2 (operation op2-input-message
+                    op2-output-message)))
+
+  (define-interface secondInterface))
+
+
 
 (display-schema demo-schema)
+(display-service demo-service)
 

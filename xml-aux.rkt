@@ -11,6 +11,7 @@
            XExpr))
 
 (provide (struct-out qname)
+         make-qname
          qname->string
          qname->symbol
          make-xml-element
@@ -19,9 +20,7 @@
          tns-prefix
          tns
          wsdl-prefix
-         wsdl
-         types-prefix
-         types)
+         wsdl)
 
 (struct qname
   ([prefix : Symbol]
@@ -92,9 +91,7 @@
   (syntax-parse stx
     [(_ x:id) #'(λ () (qname (wsdl-prefix) 'x))]))
 
-(define types-prefix : (Parameterof Symbol)
-  (make-parameter 'types))
-
-(define-syntax (types stx)
+(define-syntax (make-qname stx)
   (syntax-parse stx
-    [(_ x:id) #'(λ () (qname (types-prefix) 'x))]))
+    [(_ x:id y:id)
+     #'(λ () (qname 'x 'y))]))

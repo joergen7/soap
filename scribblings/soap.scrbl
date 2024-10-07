@@ -1,6 +1,5 @@
 #lang scribble/manual
-@require[@for-label[soap
-                    racket/base]]
+@require[@for-label[soap]]
 
 @title{soap}
 @author{"Jörgen Brandt"}

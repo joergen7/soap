@@ -32,13 +32,13 @@
   wsdl:definitions-member)
 
 (struct wsdl:message
-  ([part-list : (HashTable Symbol wsdl:part)]))
+  ([part-table : (HashTable Symbol wsdl:part)]))
 
 (struct wsdl:part
   ([type : (-> qname)]))
 
 (struct wsdl:port-type
-  ([operation-list : (HashTable Symbol wsdl:operation)]))
+  ([operation-table : (HashTable Symbol wsdl:operation)]))
 
 (struct wsdl:operation
   ([input  : (U #f (-> qname))]
@@ -73,11 +73,11 @@
         #:body        (append a-body b-body)))] 
 
     ;; wsdl:message
-    [(wsdl:message part-list)
+    [(wsdl:message part-table)
      (make-xml-element
       ((wsdl message))
       #:name-value name-value
-      #:body       (hash-map part-list proc))]
+      #:body       (hash-map part-table proc))]
 
     ;; wsdl:part
     [(wsdl:part type)
@@ -87,11 +87,11 @@
       #:att-list (list (cons 'type (qname->string (type)))))]
 
     ;; wsdl:port-type
-    [(wsdl:port-type operation-list)
+    [(wsdl:port-type operation-table)
      (make-xml-element
       ((wsdl portType))
       #:name-value name-value
-      #:body       (hash-map operation-list proc))]
+      #:body       (hash-map operation-table proc))]
 
     ;; wsdl:operation
     [(wsdl:operation input output fault)

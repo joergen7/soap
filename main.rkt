@@ -34,30 +34,35 @@
  #%datum
  #%module-begin
  in-namespace
- (rename-out
-  [display-xs:schema display-schema]
-  [define-xs:schema  define-schema]
-  [define-xs:type    define-type]
-  [define-xs:import  import]
-  [make-xs:all       all]
-  [make-xs:sequence  sequence]
-  [make-xs:choice    choice]
-  [xs:min-inclusive  min-inclusive]
-  [xs:min-exclusive  min-exclusive]
-  [xs:max-inclusive  max-inclusive]
-  [xs:max-exclusive  max-exclusive]
-  [xs:pattern        pattern]
-  [xs:length         len]
-  [xs:min-length     min-len]
-  [xs:max-length     max-len]
-  [xs:element        element])
-
- range
- enum
  unbounded
  xs
  tns
- )
+ (rename-out
+  [display-xs:schema        display-schema]
+  [display-wsdl:definitions display-service]
+  [define-xs:schema         define-schema]
+  [define-xs:type           define-type]
+  [define-xs:import         import]
+  [make-xs:all              all]
+  [make-xs:sequence         sequence]
+  [make-xs:choice           choice]
+  [xs:min-inclusive         min-inclusive]
+  [xs:min-exclusive         min-exclusive]
+  [xs:max-inclusive         max-inclusive]
+  [xs:max-exclusive         max-exclusive]
+  [xs:pattern               pattern]
+  [xs:length                length]
+  [xs:min-length            min-length]
+  [xs:max-length            max-length]
+  [xs:range                 range]
+  [xs:enum                  enum]
+  [define-wsdl:definitions  define-service]
+  [define-wsdl:port-type    define-interface]
+  [define-wsdl:message      define-message]
+  [make-wsdl:operation      operation]
+  [make-qname               :]
+  [wsdl:part                part]
+  ))
 
 
 ;; reader module
@@ -74,27 +79,62 @@
   (let ([t0 : (HashTable Symbol (U xs:import xs:schema)) (hash)])
     (make-parameter t0)))
 
-(define a-type-table : (Parameterof (HashTable Symbol xs:schema-member))
+(define a-schema-table : (Parameterof (HashTable Symbol xs:schema-member))
   (let ([t0 : (HashTable Symbol xs:schema-member) (hash)])
+    (make-parameter t0)))
+
+(define a-wsdl-table : (Parameterof (HashTable Symbol wsdl:definitions-member))
+  (let ([t0 : (HashTable Symbol wsdl:definitions-member) (hash)])
     (make-parameter t0)))
 
 
 ;; language extensions
+
+(define-syntax (resolve stx)
+  (syntax-parse stx
+    [(_ x:id) #'(tns x)]
+    [(_ x)    #'x]))
 
 (define-syntax (store stx)
   (syntax-parse stx
     [(_ param:id key:id value)
      #'(param (hash-set (param) 'key value))]))
 
-(define-syntax (store-type stx)
+(define-syntax (store-schema stx)
   (syntax-parse stx
     [(_ key:id value)
-     #'(store a-type-table key value)]))
+     #'(store a-schema-table key value)]))
 
 (define-syntax (store-import stx)
   (syntax-parse stx
     [(_ key:id value)
      #'(store a-import-table key value)]))
+
+(define-syntax (store-wsdl stx)
+  (syntax-parse stx
+    [(_ key:id value)
+     #'(store a-wsdl-table key value)]))
+
+(define-syntax (make-attribute-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-attribute-table r ...) 'x e)]))
+
+(define-syntax (make-element-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
+
+(define-syntax (make-operation-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol wsdl:operation) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-operation-table r ...) 'x e)]))
+
+(define-syntax (make-part-table stx)
+  (syntax-parse stx
+    [(_)                #'(let ([t : (HashTable Symbol wsdl:part) (hash)]) t)]
+    [(_ (x:id e) r ...) #'(hash-set (make-part-table r ...) 'x e)]))
+  
 
 (define-syntax (in-namespace stx)
   (syntax-parse stx
@@ -111,12 +151,12 @@
   (syntax-parse stx
     [(_ e_i ...)
      #'(parameterize ([a-import-table (hash)]
-                      [a-type-table   (hash)])
+                      [a-schema-table   (hash)])
          e_i ...
          (xs:schema
           (a-namespace)
           (a-import-table)
-          (a-type-table)))]))
+          (a-schema-table)))]))
 
 (define-syntax (define-xs:import stx)
   (syntax-parse stx
@@ -145,12 +185,12 @@
 (define-syntax (define-xs:type stx)
   (syntax-parse stx
     [(_ x:id e_i ...)
-     #'(store-type
+     #'(store-schema
         x
         (make-xs:type e_i ...))]))
 
-(: range (-> Real Real xs:simple-type))
-(define (range lo hi)
+(: xs:range (-> Real Real xs:simple-type))
+(define (xs:range lo hi)
   (xs:simple-type
    (if (and (exact-integer? lo)
             (exact-integer? hi))
@@ -159,8 +199,8 @@
    (list (xs:min-inclusive lo)
          (xs:max-inclusive hi))))
 
-(: enum (-> String * xs:simple-type))
-(define (enum . s-list)
+(: xs:enum (-> String * xs:simple-type))
+(define (xs:enum . s-list)
   (xs:simple-type
    xs:string
    (map xs:enumeration s-list)))
@@ -174,15 +214,7 @@
      (xs:simple-type head tail)]))
 
 
-(define-syntax (make-attribute-table stx)
-  (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
-
-(define-syntax (make-element-table stx)
-  (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
+  
 
 (define-syntax (make-xs:type stx)
   (syntax-parse stx
@@ -202,23 +234,82 @@
 
 (define-syntax (make-xs:all stx)
   (syntax-parse stx
-    [(_ r ...)
+    [(_ (x_i:id type_i hi_i lo_i) ...)
      #'(xs:all
-        (make-element-table r ...))]))
+        (make-element-table
+         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
          
 (define-syntax (make-xs:sequence stx)
   (syntax-parse stx
-    [(_ r ...)
+    [(_ (x_i:id type_i hi_i lo_i) ...)
      #'(xs:sequence
-        (make-element-table r ...))]))
+        (make-element-table
+         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
          
 (define-syntax (make-xs:choice stx)
   (syntax-parse stx
-    [(_ lo hi r ...)
+    [(_ hi lo (x_i:id type_i hi_i lo_i) ...)
      #'(xs:choice
-        lo
         hi
-        (make-element-table r ...))]))
+        lo
+        (make-element-table
+         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
+
+(define-syntax (define-wsdl:definitions stx)
+  (syntax-parse stx
+    [(_ x:id e_i ...)
+     #'(define x : wsdl:definitions
+         (make-wsdl:definitions
+          e_i ...))]))
+
+(define-syntax (make-wsdl:definitions stx)
+  (syntax-parse stx
+    [(_ e_i ...)
+     #'(parameterize ([a-import-table (hash)]
+                      [a-wsdl-table   (hash)])
+         e_i ...
+         (wsdl:definitions
+          (a-namespace)
+          (a-import-table)
+          (a-wsdl-table)))]))
+                 
+(define-syntax (define-wsdl:port-type stx)
+  (syntax-parse stx
+    [(_ x:id r ...)
+     #'(store-wsdl x (make-wsdl:port-type r ...))]))
+
+(define-syntax (make-wsdl:port-type stx)
+  (syntax-parse stx
+    [(_ r ...)
+     #'(wsdl:port-type (make-operation-table r ...))]))
+
+(define-syntax (define-wsdl:message stx)
+  (syntax-parse stx
+    [(_ x:id r ...)
+     #'(store-wsdl x (make-wsdl:message r ...))]))
+
+(define-syntax (make-wsdl:message stx)
+  (syntax-parse stx
+    [(_ (x:id n) ...)
+     #'(wsdl:message (make-part-table (x (wsdl:part n)) ...))]))
+
+(define-syntax (make-wsdl:operation stx)
+  (syntax-parse stx
+    [(_ a)     #'(wsdl:operation (resolve a) #f #f)]
+    [(_ a b)   #'(wsdl:operation (resolve a) (resolve b) #f)]
+    [(_ a b c) #'(wsdl:operation (resolve a) (resolve b) (resolve c))]))
+
+
+
+
+
+
+
+
+
+
+
+;; display forms
 
 (define-syntax (display-xexpr stx)
   (syntax-parse stx
@@ -234,11 +325,10 @@
     ([_ e]
      #'(display-xexpr (xs->xexpr e)))))
 
-;; TODO
-;; - proper error message on hash-ref flunk
-;; - no redefining schemas
-;; - no name redefining prefixes on import
-
+(define-syntax (display-wsdl:definitions stx)
+  (syntax-parse stx
+    ([_ e]
+     #'(display-xexpr (wsdl->xexpr e)))))
 
 
 
