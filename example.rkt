@@ -46,7 +46,7 @@
   (define-type state
     (enum "ok" "faulty" "foobar"))
 
-  ;; complex type without attributes
+  ;; complex type: element only
   (define-type myStruct1
     ()
     (all
@@ -55,15 +55,27 @@
      (month myOtherMonthType 0 1)
      ))
 
-  ;; complex type with attributes
+  ;; complex type: attribute only
   (define-type myStruct2
+    ([att1 (xs string)  #f]
+     [att2 (xs integer) #t]))
+    
+
+  ;; complex type: attributes and elements
+  (define-type myStruct3
     ([att1 (xs string)  #f]
      [att2 (xs integer) #t])
     (sequence
      (id    myStringType     1 1)
      (date  (xs date)        0 unbounded)
-     (month myOtherMonthType 0 1)
-     ))
+     (month myOtherMonthType 0 1)))
+
+  ;; complex type: simple content
+  (define-type myStruct2
+    ([att1 (xs string)  #f]
+     [att2 (xs integer) #t])
+    myStringType)
+    
   )
 
 

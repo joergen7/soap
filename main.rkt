@@ -192,38 +192,52 @@
 (: xs:range (-> Real Real xs:simple-type))
 (define (xs:range lo hi)
   (xs:simple-type
-   (if (and (exact-integer? lo)
-            (exact-integer? hi))
-       xs:integer
-       xs:decimal)
-   (list (xs:min-inclusive lo)
-         (xs:max-inclusive hi))))
+   (xs:restriction
+    (if (and (exact-integer? lo)
+             (exact-integer? hi))
+        xs:integer
+        xs:decimal)
+    (list (xs:min-inclusive lo)
+          (xs:max-inclusive hi)))))
 
 (: xs:enum (-> String * xs:simple-type))
 (define (xs:enum . s-list)
   (xs:simple-type
-   xs:string
-   (map xs:enumeration s-list)))
+   (xs:restriction
+    xs:string
+    (map xs:enumeration s-list))))
 
-(: make-xs:simple-type (-> (U (-> qname) xs:simple-type) xs:simple-type-member * xs:simple-type))
+(: make-xs:simple-type (-> (U (-> qname) xs:simple-type) xs:restriction-member * xs:simple-type))
 (define (make-xs:simple-type head . tail)
   (cond
     [(xs:simple-type? head)
      head]
     [else
-     (xs:simple-type head tail)]))
+     (xs:simple-type (xs:restriction head tail))]))
 
-
+(: make-xs:complex-type-member (-> (U xs:sequence xs:all xs:choice (-> qname)) xs:complex-type-member))
+(define (make-xs:complex-type-member e)
+  (cond
+    [(xs:sequence? e) e]
+    [(xs:all? e)      e]
+    [(xs:choice? e)   e]
+    [else             (xs:restriction e '())]))
   
 
 (define-syntax (make-xs:type stx)
   (syntax-parse stx
 
-    ;; complex type
+    ;; complex type with body
     [(_ ((a_i:id t_i r_i:boolean) ...) e)
      #'(xs:complex-type
         (make-attribute-table (a_i (xs:attribute t_i r_i)) ...)
-        e)]
+        (make-xs:complex-type-member (resolve e)))]
+
+    ;; complex type no body
+    [(_ ((a_i:id t_i r_i:boolean) ...))
+     #'(xs:complex-type
+        (make-attribute-table (a_i (xs:attribute t_i r_i)) ...)
+        #f)]
 
     ;; simple type
     [(_ head e_i ...)

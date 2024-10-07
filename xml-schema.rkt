@@ -29,8 +29,9 @@
  (struct-out xs:import)
  (struct-out xs:element)
  (struct-out xs:simple-type)
- xs:simple-type-member
- xs:simple-type-member?
+ (struct-out xs:restriction)
+ xs:restriction-member
+ xs:restriction-member?
  (struct-out xs:min-inclusive)
  (struct-out xs:min-exclusive)
  (struct-out xs:max-inclusive)
@@ -112,10 +113,13 @@
 ;; simple-type
 
 (struct xs:simple-type
-  ([base : (-> qname)]
-   [body : (Listof xs:simple-type-member)]))
+  ([body : xs:restriction]))
 
-(define-type xs:simple-type-member
+(struct xs:restriction
+  ([base : (-> qname)]
+   [body : (Listof xs:restriction-member)]))
+
+(define-type xs:restriction-member
   (U xs:min-inclusive
      xs:min-exclusive
      xs:max-inclusive
@@ -126,8 +130,8 @@
      xs:min-length
      xs:max-length))
 
-(define-predicate xs:simple-type-member?
-  xs:simple-type-member)
+(define-predicate xs:restriction-member?
+  xs:restriction-member)
 
 (struct xs:min-inclusive
   ([value : Real]))
@@ -162,7 +166,9 @@
    [body            : xs:complex-type-member]))
 
 (define-type xs:complex-type-member
-  (U xs:sequence
+  (U #f
+     xs:restriction
+     xs:sequence
      xs:all
      xs:choice))
 
@@ -275,15 +281,18 @@
         #:name-value name-value))]
 
     ;; xs:simple-type
-    [(xs:simple-type base body)
+    [(xs:simple-type body)
      (make-xml-element
       ((xs simpleType))
       #:name-value name-value
-      #:body (list
-              (make-xml-element
-               ((xs restriction))
-               #:att-list   (list (cons 'base (qname->string (base))))
-               #:body       (map xs->xexpr body))))]
+      #:body       (list (xs->xexpr body)))]
+
+    ;; xs:restriction
+    [(xs:restriction base body)
+     (make-xml-element
+      ((xs restriction))
+      #:att-list (list (cons 'base (qname->string (base))))
+      #:body     (map xs->xexpr body))]
     
     ;; xs:min-inclusive
     [(xs:min-inclusive value)
@@ -346,7 +355,9 @@
       #:name-value name-value
       #:body (append
               (hash-map attribute-table proc)
-              (list (xs->xexpr body))))]
+              (if body
+                  (list (xs->xexpr body))
+                  '())))]
 
     ;; xs:attribute
     [(xs:attribute type required)
@@ -451,11 +462,11 @@
                                  (maxOccurs "3")))))
 
 
-  (check-equal? (xs->xexpr (xs:simple-type xs:string '()) #:name-value 'atype)
+  (check-equal? (xs->xexpr (xs:simple-type (xs:restriction xs:string '())) #:name-value 'atype)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string")))))
   
-  (check-equal? (xs->xexpr (xs:simple-type xs:string (list (xs:enumeration "bla"))) #:name-value 'atype)
+  (check-equal? (xs->xexpr (xs:simple-type (xs:restriction xs:string (list (xs:enumeration "bla")))) #:name-value 'atype)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string"))
                                                 (xs:enumeration ((value "bla"))))))
@@ -533,7 +544,7 @@
 
   (check-equal? (get-provide-set (xs:schema "urn:target-namespace" (hash)
                                                   (hash 'bla (xs:element xs:string 1 1)
-                                                        'blub (xs:simple-type xs:string '())
+                                                        'blub (xs:simple-type (xs:restriction xs:string '()))
                                                         'foo (xs:complex-type (hash) (xs:all (hash))))))
                 (set 'foo 'blub))
 
