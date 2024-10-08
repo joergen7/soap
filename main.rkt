@@ -175,11 +175,11 @@
     
     ;; foreign import without declarations
     [(_ s:str)
-     #'(make-xs:import s ())]
+     #'(make-xs:import s () ())]
     
     ;; Foreign import with declarations
-    [(_ s:str (a_i:id ...))
-     #'(xs:import s (set 'a_i ...))]))
+    [(_ s:str (s_i:id ...) (c_i:id ...))
+     #'(xs:import s (set 's_i ...) (set 'c_i ...))]))
         
 
 (define-syntax (define-xs:type stx)

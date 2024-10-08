@@ -18,8 +18,8 @@
   ;; import external schema
   (import common "http://company.org/important/common/v4")
 
-  ;; import external schema with list of imported symbols
-  (import special "http://company.org/important/special/v1" (yay ok funny))
+  ;; import external schema with imported simple types and complex types
+  (import special "http://company.org/important/special/v1" (yay ok funny) (foo bar bla blub))
 
 
   ;; defining types
