@@ -25,6 +25,7 @@
           set)
  "xml-aux.rkt"
  "xml-schema.rkt"
+ "xml-schema-validate.rkt"
  "xml-wsdl.rkt")
 
 (provide
@@ -145,18 +146,33 @@
   (syntax-parse stx
     [(_ x:id e_i ...)
      #'(define x : xs:schema
-         (make-xs:schema e_i ...))]))
+         (make-xs:schema
+          (define-xs:import
+            xs
+            "http://www.w3.org/2001/XMLSchema"
+            (string
+             integer
+             nonNegativeInteger
+             unsignedShort
+             decimal
+             date
+             time
+             dateTime
+             boolean)
+            ())
+          e_i ...))]))
 
 (define-syntax (make-xs:schema stx)
   (syntax-parse stx
     [(_ e_i ...)
      #'(parameterize ([a-import-table (hash)]
-                      [a-schema-table   (hash)])
+                      [a-schema-table (hash)])
          e_i ...
-         (xs:schema
-          (a-namespace)
-          (a-import-table)
-          (a-schema-table)))]))
+         (validate-xs:schema
+          (xs:schema
+           (a-namespace)
+           (a-import-table)
+           (a-schema-table))))]))
 
 (define-syntax (define-xs:import stx)
   (syntax-parse stx

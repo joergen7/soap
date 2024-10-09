@@ -2,14 +2,11 @@
 
 (require
   (only-in racket/match
-           define/match
            match)
   (only-in typed/xml
            XExpr)
   (only-in racket/set
-           set
-           set-add
-           list->set)
+           set)
   "xml-aux.rkt")
 
 (provide
@@ -48,12 +45,9 @@
  (struct-out xs:sequence)
  (struct-out xs:all)
  (struct-out xs:choice)
- get-simple-provide-set
- get-complex-provide-set
  get-import-attribute-list
  get-import-xexpr-list
- xs->xexpr
- xs-validate-schema)
+ xs->xexpr)
 
 ;; base types
 
@@ -193,36 +187,6 @@
    [body       : (HashTable Symbol xs:element)]))
 
 
-(: get-simple-provide-set (-> (U xs:import xs:schema) (Setof Symbol)))
-(define/match (get-simple-provide-set o)
-
-  [((xs:schema _target-namespace _import-list body))
-
-   (: select-simple (-> Symbol Boolean))
-   (define (select-simple x)
-     (xs:simple-type? (hash-ref body x)))
-
-   (list->set
-    (filter select-simple (hash-keys body)))]
-    
-  [((xs:import _namespace simple-provide-set _complex-provide-set))
-   simple-provide-set])
-
-(: get-complex-provide-set (-> (U xs:import xs:schema) (Setof Symbol)))
-(define/match (get-complex-provide-set o)
-
-  [((xs:schema _target-namespace _import-list body))
-
-   (: select-complex (-> Symbol Boolean))
-   (define (select-complex x)
-     (xs:complex-type? (hash-ref body x)))
-
-   (list->set
-    (filter select-complex (hash-keys body)))]
-    
-  [((xs:import _namespace _simple-provide-set complex-provide-set))
-   complex-provide-set])
-
 
 
 (: get-occur-list (-> Nonnegative-Integer (U #f Nonnegative-Integer) (Listof (Pairof Symbol String))))
@@ -279,8 +243,7 @@
      (let ([a-prefix-list : (Listof (Pairof Symbol String))
                           (get-import-attribute-list import-table)]
            [b-prefix-list : (Listof (Pairof Symbol String))
-                          (list (cons (xs-prefix) "http://www.w3.org/2001/XMLSchema")
-                                (cons (tns-prefix) target-namespace))]
+                          (list (cons (tns-prefix) target-namespace))]
            [att-list : (Listof (Pairof Symbol String))
                      (list (cons 'targetNamespace target-namespace)
                            (cons 'elementFormDefault "qualified"))]
@@ -420,18 +383,7 @@
       #:att-list (get-occur-list min-occurs max-occurs)
       #:body     (hash-map body proc))]))
 
-(: xs-validate-schema (-> xs:schema xs:schema))
-(define (xs-validate-schema schema)
-  (xs-validate schema)
-  schema)
-
-(: xs-validate (-> Any Any))
-(define/match (xs-validate x)
-  ;; TODO:
-  ;; for any qname, make sure the prefix is bound to a namespace
-  ;; enforce minOccurrence <= maxOccurrence
-  ;; for any type reference make sure it is defined locally
-  )
+   
 
 (module+ test
 
@@ -444,8 +396,7 @@
     '(xs:element ((name "value") (type "xs:string") (minOccurs "1") (maxOccurs "1"))))
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" (hash) (hash 'value a-element)))
-                (list 'xs:schema '((xmlns:xs           "http://www.w3.org/2001/XMLSchema")
-                                   (xmlns:tns          "urn:target-namespace")
+                (list 'xs:schema '((xmlns:tns          "urn:target-namespace")
                                    (targetNamespace    "urn:target-namespace")
                                    (elementFormDefault "qualified"))
                       x-element))
@@ -453,19 +404,16 @@
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace"
                                       (hash 'blub (xs:import "urn:bla" (set) (set)))
                                       (hash 'value a-element)))
-                (list 'xs:schema '((xmlns:xs           "http://www.w3.org/2001/XMLSchema")
-                                   (xmlns:tns          "urn:target-namespace")
+                (list 'xs:schema '((xmlns:tns          "urn:target-namespace")
                                    (xmlns:blub         "urn:bla")
                                    (targetNamespace    "urn:target-namespace")
                                    (elementFormDefault "qualified"))
                       '(xs:import ((namespace "urn:bla")))
                       x-element))
 
-  (check-equal? (parameterize ([xs-prefix 'xsd]
-                               [tns-prefix 't])
+  (check-equal? (parameterize ([tns-prefix 't])
                   (xs->xexpr (xs:schema "urn:target-namespace" (hash) (hash 'value a-element))))
-                  (list 'xsd:schema '((xmlns:xsd          "http://www.w3.org/2001/XMLSchema")
-                                      (xmlns:t            "urn:target-namespace")
+                  (list 'xsd:schema '((xmlns:t            "urn:target-namespace")
                                       (targetNamespace    "urn:target-namespace")
                                       (elementFormDefault "qualified"))
                         '(xsd:element ((name "value") (type "xsd:string") (minOccurs "1") (maxOccurs "1")))))
@@ -561,32 +509,6 @@
 
   (check-equal? (xs->xexpr (xs:choice 2 3 (hash 'value a-element)))
                 (list 'xs:choice '((minOccurs "2") (maxOccurs "3")) x-element))
-
-  (check-equal? (get-simple-provide-set (xs:schema "urn:target-namespace" (hash) (hash)))
-                (set))
-
-  (check-equal? (get-complex-provide-set (xs:schema "urn:target-namespace" (hash) (hash)))
-                (set))
-
-  (check-equal? (get-simple-provide-set (xs:schema "urn:target-namespace" (hash)
-                                                  (hash 'bla (xs:element xs:string 1 1))))
-                (set))
-
-  (check-equal? (get-complex-provide-set (xs:schema "urn:target-namespace" (hash)
-                                                  (hash 'bla (xs:element xs:string 1 1))))
-                (set))
-
-  (check-equal? (get-simple-provide-set (xs:schema "urn:target-namespace" (hash)
-                                                  (hash 'bla (xs:element xs:string 1 1)
-                                                        'blub (xs:simple-type (xs:restriction xs:string '()))
-                                                        'foo (xs:complex-type (hash) (xs:all (hash))))))
-                (set 'blub))
-
-  (check-equal? (get-complex-provide-set (xs:schema "urn:target-namespace" (hash)
-                                                  (hash 'bla (xs:element xs:string 1 1)
-                                                        'blub (xs:simple-type (xs:restriction xs:string '()))
-                                                        'foo (xs:complex-type (hash) (xs:all (hash))))))
-                (set 'foo))
 
   )
      
