@@ -411,7 +411,8 @@
                       '(xs:import ((namespace "urn:bla")))
                       x-element))
 
-  (check-equal? (parameterize ([tns-prefix 't])
+  (check-equal? (parameterize ([xs-prefix  'xsd]
+                               [tns-prefix 't])
                   (xs->xexpr (xs:schema "urn:target-namespace" (hash) (hash 'value a-element))))
                   (list 'xsd:schema '((xmlns:t            "urn:target-namespace")
                                       (targetNamespace    "urn:target-namespace")
