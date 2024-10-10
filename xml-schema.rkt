@@ -109,7 +109,7 @@
 ;; simple-type
 
 (struct xs:simple-type
-  ([body : xs:restriction]))
+  ([restriction : xs:restriction]))
 
 (struct xs:restriction
   ([base : (-> qname)]
@@ -176,15 +176,15 @@
    [required : Boolean]))
 
 (struct xs:sequence
-  ([body : (HashTable Symbol xs:element)]))
+  ([element-table : (HashTable Symbol xs:element)]))
 
 (struct xs:all
-  ([body : (HashTable Symbol xs:element)]))
+  ([element-table : (HashTable Symbol xs:element)]))
 
 (struct xs:choice
-  ([min-occurs : Nonnegative-Integer]
-   [max-occurs : (U #f Nonnegative-Integer)]
-   [body       : (HashTable Symbol xs:element)]))
+  ([min-occurs    : Nonnegative-Integer]
+   [max-occurs    : (U #f Nonnegative-Integer)]
+   [element-table : (HashTable Symbol xs:element)]))
 
 
 
@@ -271,11 +271,11 @@
         #:name-value name-value))]
 
     ;; xs:simple-type
-    [(xs:simple-type body)
+    [(xs:simple-type restriction)
      (make-xml-element
       ((xs simpleType))
       #:name-value name-value
-      #:body       (list (xs->xexpr body)))]
+      #:body       (list (xs->xexpr restriction)))]
 
     ;; xs:restriction
     [(xs:restriction base body)
@@ -365,23 +365,23 @@
         #:name-value name-value))]
 
     ;; xs:sequence
-    [(xs:sequence body)
+    [(xs:sequence element-table)
      (make-xml-element
       ((xs sequence))
-      #:body (hash-map body proc))]
+      #:body (hash-map element-table proc))]
     
     ;; xs:all
-    [(xs:all body)
+    [(xs:all element-table)
      (make-xml-element
       ((xs all))
-      #:body (hash-map body proc))]
+      #:body (hash-map element-table proc))]
     
     ;; xs:choice
-    [(xs:choice min-occurs max-occurs body)
+    [(xs:choice min-occurs max-occurs element-table)
      (make-xml-element
       ((xs choice))
       #:att-list (get-occur-list min-occurs max-occurs)
-      #:body     (hash-map body proc))]))
+      #:body     (hash-map element-table proc))]))
 
    
 

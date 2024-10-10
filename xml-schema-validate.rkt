@@ -43,15 +43,15 @@
     [(xs:restriction _base _body)
      (verify-bind simple-table loc o)]
 
-    [(xs:sequence body)
-     (hash-for-each body proc)]
+    [(xs:sequence element-table)
+     (hash-for-each element-table proc)]
 
-    [(xs:all body)
-     (hash-for-each body proc)]
+    [(xs:all element-table)
+     (hash-for-each element-table proc)]
 
-    [(xs:choice _min-occurs _max-occurs body)
+    [(xs:choice _min-occurs _max-occurs element-table)
      (verify-occur loc o)
-     (hash-for-each body proc)]))
+     (hash-for-each element-table proc)]))
 
 (: verify-xs:schema-member (-> (HashTable Symbol (Setof Symbol))
                                (HashTable Symbol (Setof Symbol))
@@ -76,10 +76,10 @@
        (verify-occur loc o)
        (verify-bind (hash-combine simple-table complex-table) loc o))]
 
-    [(xs:simple-type body)
+    [(xs:simple-type restriction)
      (let ([loc : String
                 (format "type ~a" name)])
-       (verify-bind simple-table loc body))]
+       (verify-bind simple-table loc restriction))]
     
     [(xs:complex-type attribute-table body)
      (hash-for-each attribute-table proc)
