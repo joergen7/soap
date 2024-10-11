@@ -99,7 +99,7 @@
 (define-syntax (store stx)
   (syntax-parse stx
     [(_ param:id key:id value)
-     #'(param (hash-set (param) 'key value))]))
+     #'(param (hash-set-1 (param) 'key value))]))
 
 (define-syntax (store-schema stx)
   (syntax-parse stx
@@ -119,22 +119,28 @@
 (define-syntax (make-attribute-table stx)
   (syntax-parse stx
     [(_)                #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-attribute-table r ...) 'x e)]))
+    [(_ (x:id e) r ...) #'(hash-set-1 (make-attribute-table r ...) 'x e)]))
 
 (define-syntax (make-element-table stx)
   (syntax-parse stx
     [(_)                #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-element-table r ...) 'x e)]))
+    [(_ (x:id e) r ...) #'(hash-set-1 (make-element-table r ...) 'x e)]))
 
 (define-syntax (make-operation-table stx)
   (syntax-parse stx
     [(_)                #'(let ([t : (HashTable Symbol wsdl:operation) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-operation-table r ...) 'x e)]))
+    [(_ (x:id e) r ...) #'(hash-set-1 (make-operation-table r ...) 'x e)]))
 
 (define-syntax (make-part-table stx)
   (syntax-parse stx
     [(_)                #'(let ([t : (HashTable Symbol wsdl:part) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set (make-part-table r ...) 'x e)]))
+    [(_ (x:id e) r ...) #'(hash-set-1 (make-part-table r ...) 'x e)]))
+
+(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
+(define (hash-set-1 ht key v)
+  (when (hash-has-key? ht key)
+    (raise-user-error (format "name ~a already in use" key)))
+  (hash-set ht key v))
   
 
 (define-syntax (in-namespace stx)

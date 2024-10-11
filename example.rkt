@@ -71,7 +71,7 @@
      (month myOtherMonthType 0 1)))
 
   ;; complex type: simple content
-  (define-type myStruct2
+  (define-type myStruct4
     ([att1 (xs string)  #f]
      [att2 (xs integer) #t])
     myStringType)
