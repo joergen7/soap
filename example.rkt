@@ -27,7 +27,7 @@
 
   ;; plain string type
   (define-type myStringType
-    (xs string))
+    string)
 
   ;; regex
   (define-type myMonthType
@@ -65,7 +65,7 @@
   (define-type myStruct3
     ([att1 (xs string)  #f]
      [att2 (xs integer) #t])
-    (sequence
+    (all
      (id    myStringType     1 1)
      (date  (xs date)        0 unbounded)
      (month myOtherMonthType 0 1)))

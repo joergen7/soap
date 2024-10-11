@@ -14,6 +14,7 @@
            integer
            number))
  (only-in typed/xml
+          XExpr
           xexpr->string
           display-xml
           document
@@ -22,7 +23,8 @@
           element?
           empty-tag-shorthand)
  (only-in racket/set
-          set)
+          set
+          set-member?)
  "xml-aux.rkt"
  "xml-schema.rkt"
  "xml-schema-validate.rkt"
@@ -34,6 +36,8 @@
  #%top
  #%datum
  #%module-begin
+ provide
+ with-output-file
  in-namespace
  unbounded
  xs
@@ -45,7 +49,6 @@
   [define-xs:type           define-type]
   [define-xs:import         import]
   [make-xs:all              all]
-  [make-xs:sequence         sequence]
   [make-xs:choice           choice]
   [xs:min-inclusive         min-inclusive]
   [xs:min-exclusive         min-exclusive]
@@ -91,10 +94,34 @@
 
 ;; language extensions
 
+(define reserved-set : (Setof Symbol)
+  (set 'boolean
+       'dateTime
+       'decimal
+       'nonNegativeInteger
+       'NMTOKEN
+       'string
+       'token
+       'unsignedShort))
+
+(: resolve-qname (-> Symbol (-> qname)))
+(define (resolve-qname name)
+  (if (set-member? reserved-set name)
+      (lambda () (qname (xs-prefix) name))
+      (lambda () (qname (tns-prefix) name))))
+
 (define-syntax (resolve stx)
   (syntax-parse stx
-    [(_ x:id) #'(tns x)]
+    [(_ x:id) #'(resolve-qname 'x)]
     [(_ x)    #'x]))
+
+(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
+(define (hash-set-1 ht key v)
+  (when (hash-has-key? ht key)
+    (raise-user-error (format "name ~a already in use" key)))
+  (when (set-member? reserved-set key)
+    (raise-user-error (format "name ~a reserved" key)))
+  (hash-set ht key v))
 
 (define-syntax (store stx)
   (syntax-parse stx
@@ -118,30 +145,39 @@
 
 (define-syntax (make-attribute-table stx)
   (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set-1 (make-attribute-table r ...) 'x e)]))
+
+    [(_)
+     #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
+
+    [(_ (x:id e) r ...)
+     #'(hash-set-1 (make-attribute-table r ...) 'x (assert e xs:attribute?))]))
 
 (define-syntax (make-element-table stx)
   (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set-1 (make-element-table r ...) 'x e)]))
+
+    [(_)
+     #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
+    
+    [(_ (x:id e) r ...)
+     #'(hash-set-1 (make-element-table r ...) 'x (assert e xs:element?))]))
 
 (define-syntax (make-operation-table stx)
   (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol wsdl:operation) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set-1 (make-operation-table r ...) 'x e)]))
+
+    [(_)
+     #'(let ([t : (HashTable Symbol wsdl:operation) (hash)]) t)]
+
+    [(_ (x:id e) r ...)
+     #'(hash-set-1 (make-operation-table r ...) 'x (assert e wsdl:operation?))]))
 
 (define-syntax (make-part-table stx)
   (syntax-parse stx
-    [(_)                #'(let ([t : (HashTable Symbol wsdl:part) (hash)]) t)]
-    [(_ (x:id e) r ...) #'(hash-set-1 (make-part-table r ...) 'x e)]))
 
-(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
-(define (hash-set-1 ht key v)
-  (when (hash-has-key? ht key)
-    (raise-user-error (format "name ~a already in use" key)))
-  (hash-set ht key v))
-  
+    [(_)
+     #'(let ([t : (HashTable Symbol wsdl:part) (hash)]) t)]
+
+    [(_ (x:id e) r ...)
+     #'(hash-set-1 (make-part-table r ...) 'x (assert e wsdl:part?))]))
 
 (define-syntax (in-namespace stx)
   (syntax-parse stx
@@ -153,19 +189,12 @@
     [(_ x:id e_i ...)
      #'(define x : xs:schema
          (make-xs:schema
-          (define-xs:import
-            xs
+          (store-import
+           xs
+           (xs:import
             "http://www.w3.org/2001/XMLSchema"
-            (string
-             integer
-             nonNegativeInteger
-             unsignedShort
-             decimal
-             date
-             time
-             dateTime
-             boolean)
-            ())
+            reserved-set
+            (set)))
           e_i ...))]))
 
 (define-syntax (make-xs:schema stx)
@@ -213,6 +242,8 @@
 
 (: xs:range (-> Real Real xs:simple-type))
 (define (xs:range lo hi)
+  (when (> lo hi)
+    (raise-user-error "invalid range: [~a, ~a]" lo hi))
   (xs:simple-type
    (xs:restriction
     (if (and (exact-integer? lo)
@@ -237,10 +268,9 @@
     [else
      (xs:simple-type (xs:restriction head tail))]))
 
-(: make-xs:complex-type-member (-> (U xs:sequence xs:all xs:choice (-> qname)) xs:complex-type-member))
+(: make-xs:complex-type-member (-> (U xs:all xs:choice (-> qname)) xs:complex-type-member))
 (define (make-xs:complex-type-member e)
   (cond
-    [(xs:sequence? e) e]
     [(xs:all? e)      e]
     [(xs:choice? e)   e]
     [else             (xs:restriction e '())]))
@@ -263,7 +293,7 @@
 
     ;; simple type
     [(_ head e_i ...)
-     #'(make-xs:simple-type head e_i ...)]))
+     #'(make-xs:simple-type (resolve head) e_i ...)]))
 
 
                                
@@ -272,13 +302,6 @@
   (syntax-parse stx
     [(_ (x_i:id type_i hi_i lo_i) ...)
      #'(xs:all
-        (make-element-table
-         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
-         
-(define-syntax (make-xs:sequence stx)
-  (syntax-parse stx
-    [(_ (x_i:id type_i hi_i lo_i) ...)
-     #'(xs:sequence
         (make-element-table
          (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
          
@@ -347,26 +370,32 @@
 
 ;; display forms
 
-(define-syntax (display-xexpr stx)
+(: display-xexpr (-> XExpr Void))
+(define (display-xexpr e)
+  (parameterize ([empty-tag-shorthand 'always])
+    (display-xml
+     (document (prolog '() #f '())
+               (assert (xexpr->xml e) element?)
+               '()))))
+
+(: display-xs:schema (-> xs:schema Void))
+(define (display-xs:schema e)
+  (display-xexpr (xs->xexpr e)))
+
+(: display-wsdl:definitions (-> wsdl:definitions Void))
+(define (display-wsdl:definitions e)
+  (display-xexpr (wsdl->xexpr e)))
+
+(define-syntax (with-output-file stx)
   (syntax-parse stx
-    [(_ e)
-     #'(parameterize ([empty-tag-shorthand 'always])
-         (display-xml
-          (document (prolog '() #f '())
-                    (assert (xexpr->xml e) element?)
-                    '())))]))
-
-(define-syntax (display-xs:schema stx)
-  (syntax-parse stx
-    ([_ e]
-     #'(display-xexpr (xs->xexpr e)))))
-
-(define-syntax (display-wsdl:definitions stx)
-  (syntax-parse stx
-    ([_ e]
-     #'(display-xexpr (wsdl->xexpr e)))))
-
-
+    [(_ path:str e ...)
+     #'(call-with-output-file
+         path
+         (lambda ([out : Output-Port])
+           (parameterize ([current-output-port out])
+             e ...))
+         #:mode   'text
+         #:exists 'replace)]))
 
 
 

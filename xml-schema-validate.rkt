@@ -43,9 +43,6 @@
     [(xs:restriction _base _body)
      (verify-bind simple-table loc o)]
 
-    [(xs:sequence element-table)
-     (hash-for-each element-table proc)]
-
     [(xs:all element-table)
      (hash-for-each element-table proc)]
 

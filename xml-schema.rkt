@@ -42,7 +42,6 @@
  xs:complex-type-member
  xs:complex-type-member?
  (struct-out xs:attribute)
- (struct-out xs:sequence)
  (struct-out xs:all)
  (struct-out xs:choice)
  get-import-attribute-list
@@ -164,7 +163,6 @@
 (define-type xs:complex-type-member
   (U #f
      xs:restriction
-     xs:sequence
      xs:all
      xs:choice))
 
@@ -174,9 +172,6 @@
 (struct xs:attribute
   ([type     : (-> qname)]
    [required : Boolean]))
-
-(struct xs:sequence
-  ([element-table : (HashTable Symbol xs:element)]))
 
 (struct xs:all
   ([element-table : (HashTable Symbol xs:element)]))
@@ -364,12 +359,6 @@
                       required-list)
         #:name-value name-value))]
 
-    ;; xs:sequence
-    [(xs:sequence element-table)
-     (make-xml-element
-      ((xs sequence))
-      #:body (hash-map element-table proc))]
-    
     ;; xs:all
     [(xs:all element-table)
      (make-xml-element
@@ -492,12 +481,6 @@
                 '(xs:attribute ((name    "prodid")
                                 (type    "xs:string")
                                 (use     "required"))))
-
-  (check-equal? (xs->xexpr (xs:sequence (hash)))
-                '(xs:sequence ()))
-
-  (check-equal? (xs->xexpr (xs:sequence (hash 'value a-element)))
-                (list 'xs:sequence '() x-element))
 
   (check-equal? (xs->xexpr (xs:all (hash)))
                 '(xs:all ()))
