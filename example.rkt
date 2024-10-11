@@ -31,7 +31,6 @@
 
   ;; regex
   (define-type myMonthType
-    (xs string)
     (pattern "(0[1-9])|(1[0-2])"))
 
   ;; integer range
@@ -51,29 +50,29 @@
     ()
     (all
      (id    myStringType     1 1)
-     (date  (xs date)        0 unbounded)
+     (oDate date             0 unbounded)
      (month myOtherMonthType 0 1)
      ))
 
   ;; complex type: attribute only
   (define-type myStruct2
-    ([att1 (xs string)  #f]
-     [att2 (xs integer) #t]))
+    ([att1 string  #f]
+     [att2 integer #t]))
     
 
   ;; complex type: attributes and elements
   (define-type myStruct3
-    ([att1 (xs string)  #f]
-     [att2 (xs integer) #t])
+    ([att1 string  #f]
+     [att2 integer #t])
     (all
      (id    myStringType     1 1)
-     (date  (xs date)        0 unbounded)
+     (oDate date             0 unbounded)
      (month myOtherMonthType 0 1)))
 
   ;; complex type: simple content
   (define-type myStruct4
-    ([att1 (xs string)  #f]
-     [att2 (xs integer) #t])
+    ([att1 string  #f]
+     [att2 integer #t])
     myStringType)
     
   )

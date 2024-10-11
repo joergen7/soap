@@ -158,7 +158,7 @@
        (hash-ref bind-table type-prefix default-thunk))
      (unless (set-member? relevant-set type-name)
        (raise-user-error
-        (format "~a: type ~a:~a undefined || relevant set: ~a"
+        (format "~a: type ~a:~a undefined -- must be in ~a"
                 loc
                 type-prefix
                 type-name

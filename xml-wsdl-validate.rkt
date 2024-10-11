@@ -64,7 +64,6 @@
 
     (verify-bind message-table loc operation))
                              
-    
   (match o
 
     [(wsdl:message part-table)

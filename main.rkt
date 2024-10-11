@@ -28,7 +28,8 @@
  "xml-aux.rkt"
  "xml-schema.rkt"
  "xml-schema-validate.rkt"
- "xml-wsdl.rkt")
+ "xml-wsdl.rkt"
+ "xml-wsdl-validate.rkt")
 
 (provide
  #%top-interaction
@@ -54,12 +55,12 @@
   [xs:min-exclusive         min-exclusive]
   [xs:max-inclusive         max-inclusive]
   [xs:max-exclusive         max-exclusive]
-  [xs:pattern               pattern]
   [xs:length                length]
   [xs:min-length            min-length]
   [xs:max-length            max-length]
-  [xs:range                 range]
-  [xs:enum                  enum]
+  [make-xs:range            range]
+  [make-xs:enum             enum]
+  [make-xs:pattern          pattern]
   [define-wsdl:definitions  define-service]
   [define-wsdl:port-type    define-interface]
   [define-wsdl:message      define-message]
@@ -96,8 +97,10 @@
 
 (define reserved-set : (Setof Symbol)
   (set 'boolean
+       'date
        'dateTime
        'decimal
+       'integer
        'nonNegativeInteger
        'NMTOKEN
        'string
@@ -240,8 +243,8 @@
         x
         (make-xs:type e_i ...))]))
 
-(: xs:range (-> Real Real xs:simple-type))
-(define (xs:range lo hi)
+(: make-xs:range (-> Real Real xs:simple-type))
+(define (make-xs:range lo hi)
   (when (> lo hi)
     (raise-user-error "invalid range: [~a, ~a]" lo hi))
   (xs:simple-type
@@ -253,12 +256,19 @@
     (list (xs:min-inclusive lo)
           (xs:max-inclusive hi)))))
 
-(: xs:enum (-> String * xs:simple-type))
-(define (xs:enum . s-list)
+(: make-xs:enum (-> String * xs:simple-type))
+(define (make-xs:enum . s-list)
   (xs:simple-type
    (xs:restriction
     xs:string
     (map xs:enumeration s-list))))
+
+(: make-xs:pattern (-> String xs:simple-type))
+(define (make-xs:pattern p)
+  (xs:simple-type
+   (xs:restriction
+    xs:string
+    (list (xs:pattern p)))))
 
 (: make-xs:simple-type (-> (U (-> qname) xs:simple-type) xs:restriction-member * xs:simple-type))
 (define (make-xs:simple-type head . tail)
@@ -282,13 +292,13 @@
     ;; complex type with body
     [(_ ((a_i:id t_i r_i:boolean) ...) e)
      #'(xs:complex-type
-        (make-attribute-table (a_i (xs:attribute t_i r_i)) ...)
+        (make-attribute-table (a_i (xs:attribute (resolve t_i) r_i)) ...)
         (make-xs:complex-type-member (resolve e)))]
 
     ;; complex type no body
     [(_ ((a_i:id t_i r_i:boolean) ...))
      #'(xs:complex-type
-        (make-attribute-table (a_i (xs:attribute t_i r_i)) ...)
+        (make-attribute-table (a_i (xs:attribute (resolve t_i) r_i)) ...)
         #f)]
 
     ;; simple type
@@ -327,10 +337,11 @@
      #'(parameterize ([a-import-table (hash)]
                       [a-wsdl-table   (hash)])
          e_i ...
-         (wsdl:definitions
-          (a-namespace)
-          (a-import-table)
-          (a-wsdl-table)))]))
+         (validate-wsdl:definitions
+          (wsdl:definitions
+           (a-namespace)
+           (a-import-table)
+           (a-wsdl-table))))]))
                  
 (define-syntax (define-wsdl:port-type stx)
   (syntax-parse stx
