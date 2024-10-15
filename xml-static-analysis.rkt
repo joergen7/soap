@@ -158,11 +158,10 @@
        (hash-ref bind-table type-prefix default-thunk))
      (unless (set-member? relevant-set type-name)
        (raise-user-error
-        (format "~a: type ~a:~a undefined -- must be in ~a"
+        (format "~a: type ~a:~a undefined"
                 loc
                 type-prefix
-                type-name
-                relevant-set)))]))
+                type-name)))]))
 
 (: verify-bind (-> (HashTable Symbol (Setof Symbol))
                    String

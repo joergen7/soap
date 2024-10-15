@@ -336,7 +336,7 @@
     ;; xs:complex-type
     [(xs:complex-type attribute-table body)
      (make-xml-element
-      ((xs complex-type))
+      ((xs complexType))
       #:name-value name-value
       #:body (append
               (hash-map attribute-table proc)
