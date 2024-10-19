@@ -187,9 +187,15 @@
 (: get-occur-list (-> Nonnegative-Integer (U #f Nonnegative-Integer) (Listof (Pairof Symbol String))))
 (define (get-occur-list min-occurs max-occurs)
   (let ([l1 : (Listof (Pairof Symbol String))
-            (list (cons 'minOccurs (number->string min-occurs)))]
+            (if (= min-occurs 1)
+                '()
+                (list (cons 'minOccurs (number->string min-occurs))))]
         [l2 : (Listof (Pairof Symbol String))
-            (list (cons 'maxOccurs (if max-occurs (number->string max-occurs) "unbounded")))])
+            (if (and (= min-occurs 1)
+                     max-occurs
+                     (= max-occurs 1))
+                '()
+                (list (cons 'maxOccurs (if max-occurs (number->string max-occurs) "unbounded"))))])
     (append l1 l2)))
 
 (: get-import-attribute-list (-> (HashTable Symbol (U xs:import xs:schema)) (Listof (Pairof Symbol String))))
@@ -241,7 +247,8 @@
                           (list (cons (tns-prefix) target-namespace))]
            [att-list : (Listof (Pairof Symbol String))
                      (list (cons 'targetNamespace target-namespace)
-                           (cons 'elementFormDefault "qualified"))]
+                           (cons 'elementFormDefault "qualified")
+                           (cons 'attributeFormDefault "unqualified"))]
            [import-list : (Listof XExpr)
                         (get-import-xexpr-list import-table ((xs import)))]
            [body-list : (Listof XExpr)

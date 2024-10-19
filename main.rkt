@@ -47,6 +47,7 @@
   [display-xs:schema        display-schema]
   [display-wsdl:definitions display-service]
   [define-xs:schema         define-schema]
+  [define-xs:element        define-element]
   [define-xs:type           define-type]
   [define-xs:import         import]
   [make-xs:all              all]
@@ -126,25 +127,17 @@
     (raise-user-error (format "name ~a reserved" key)))
   (hash-set ht key v))
 
-(define-syntax (store stx)
-  (syntax-parse stx
-    [(_ param:id key:id value)
-     #'(param (hash-set-1 (param) 'key value))]))
+(: store-schema (-> Symbol xs:schema-member Void))
+(define (store-schema x v)
+  (a-schema-table (hash-set-1 (a-schema-table) x v)))
 
-(define-syntax (store-schema stx)
-  (syntax-parse stx
-    [(_ key:id value)
-     #'(store a-schema-table key value)]))
+(: store-import (-> Symbol (U xs:import xs:schema) Void))
+(define (store-import x v)
+  (a-import-table (hash-set-1 (a-import-table) x v)))
 
-(define-syntax (store-import stx)
-  (syntax-parse stx
-    [(_ key:id value)
-     #'(store a-import-table key value)]))
-
-(define-syntax (store-wsdl stx)
-  (syntax-parse stx
-    [(_ key:id value)
-     #'(store a-wsdl-table key value)]))
+(: store-wsdl (-> Symbol wsdl:definitions-member Void))
+(define (store-wsdl x v)
+  (a-wsdl-table (hash-set-1 (a-wsdl-table) x v)))
 
 (define-syntax (make-attribute-table stx)
   (syntax-parse stx
@@ -193,7 +186,7 @@
      #'(define x : xs:schema
          (make-xs:schema
           (store-import
-           xs
+           (xs-prefix)
            (xs:import
             "http://www.w3.org/2001/XMLSchema"
             reserved-set
@@ -217,11 +210,11 @@
     
     ;; local import
     [(_ x:id a:id)
-     #'(store-import x a)]
+     #'(store-import 'x a)]
 
     ;; foreign import
     [(_ x:id e ...)
-     #'(store-import x (make-xs:import e ...))]))
+     #'(store-import 'x (make-xs:import e ...))]))
 
 
 (define-syntax (make-xs:import stx)
@@ -234,13 +227,24 @@
     ;; Foreign import with declarations
     [(_ s:str (s_i:id ...) (c_i:id ...))
      #'(xs:import s (set 's_i ...) (set 'c_i ...))]))
+
+(define-syntax (define-xs:element stx)
+  (syntax-parse stx
+    [(_ x:id y:id)
+     #'(store-schema
+        'x
+        (make-xs:element (resolve y)))]))
+
+(: make-xs:element (-> (-> qname) xs:element))
+(define (make-xs:element qn)
+  (xs:element qn 1 1))
         
 
 (define-syntax (define-xs:type stx)
   (syntax-parse stx
     [(_ x:id e_i ...)
      #'(store-schema
-        x
+        'x
         (make-xs:type e_i ...))]))
 
 (: make-xs:range (-> Real Real xs:simple-type))
@@ -346,7 +350,7 @@
 (define-syntax (define-wsdl:port-type stx)
   (syntax-parse stx
     [(_ x:id r ...)
-     #'(store-wsdl x (make-wsdl:port-type r ...))]))
+     #'(store-wsdl 'x (make-wsdl:port-type r ...))]))
 
 (define-syntax (make-wsdl:port-type stx)
   (syntax-parse stx
@@ -356,7 +360,7 @@
 (define-syntax (define-wsdl:message stx)
   (syntax-parse stx
     [(_ x:id r ...)
-     #'(store-wsdl x (make-wsdl:message r ...))]))
+     #'(store-wsdl 'x (make-wsdl:message r ...))]))
 
 (define-syntax (make-wsdl:message stx)
   (syntax-parse stx
@@ -368,15 +372,6 @@
     [(_ a)     #'(wsdl:operation (resolve a) #f #f)]
     [(_ a b)   #'(wsdl:operation (resolve a) (resolve b) #f)]
     [(_ a b c) #'(wsdl:operation (resolve a) (resolve b) (resolve c))]))
-
-
-
-
-
-
-
-
-
 
 
 ;; display forms
