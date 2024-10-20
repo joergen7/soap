@@ -19,21 +19,17 @@
 
 (: verify-xs:complex-type-member (-> (HashTable Symbol (Setof Symbol))
                                      (HashTable Symbol (Setof Symbol))
-                                     Symbol
                                      xs:complex-type-member
                                      Void))
-(define (verify-xs:complex-type-member simple-table complex-table name o)
-
-  (define loc : String
-    (format "type ~a" name))
+(define (verify-xs:complex-type-member simple-table complex-table o)
 
   (: proc (-> Symbol xs:element Void))
   (define (proc name elem)
-    (verify-xs:schema-member
-     simple-table
-     complex-table
-     name
-     elem))
+    (with-stack-entry (stack-entry #f name)
+      (verify-xs:schema-member
+       simple-table
+       complex-table
+       elem)))
   
   (match o
 
@@ -41,46 +37,42 @@
      (void)]
 
     [(xs:restriction _base _body)
-     (verify-bind simple-table loc o)]
+     (verify-bind simple-table o)]
 
     [(xs:all element-table)
-     (hash-for-each element-table proc)]
+     (with-stack-entry (stack-entry 'all #f)
+       (hash-for-each element-table proc))]
 
     [(xs:choice _min-occurs _max-occurs element-table)
-     (verify-occur loc o)
-     (hash-for-each element-table proc)]))
+     (with-stack-entry (stack-entry 'choice #f)
+       (verify-occur o)
+       (hash-for-each element-table proc))]))
 
 (: verify-xs:schema-member (-> (HashTable Symbol (Setof Symbol))
                                (HashTable Symbol (Setof Symbol))
-                               Symbol
                                xs:schema-member
                                Void))
-(define (verify-xs:schema-member simple-table complex-table name o)
+(define (verify-xs:schema-member simple-table complex-table o)
 
   (: proc (-> Symbol xs:attribute Void))
   (define (proc att-name att)
-    (let ([loc : String
-               (format "type ~a/attribute ~a" name att-name)])
-      (match att
-        [(xs:attribute type _required)
-         (verify-bind simple-table loc att)])))
+    (match att
+      [(xs:attribute type _required)
+       (with-stack-entry (stack-entry #f att-name)
+         (verify-bind simple-table att))]))
 
   (match o
     
     [(xs:element type min-occurs max-occurs)
-     (let ([loc : String
-                (format "element ~a" name)])
-       (verify-occur loc o)
-       (verify-bind (hash-combine simple-table complex-table) loc o))]
+     (verify-occur o)
+     (verify-bind (hash-combine simple-table complex-table) o)]
 
     [(xs:simple-type restriction)
-     (let ([loc : String
-                (format "type ~a" name)])
-       (verify-bind simple-table loc restriction))]
+     (verify-bind simple-table restriction)]
     
     [(xs:complex-type attribute-table body)
      (hash-for-each attribute-table proc)
-     (verify-xs:complex-type-member simple-table complex-table name body)]))
+     (verify-xs:complex-type-member simple-table complex-table body)]))
 
 
 (: verify-xs:schema (-> xs:schema
@@ -93,19 +85,27 @@
   (define complex-table : (HashTable Symbol (Setof Symbol))
     (get-provide-table schema get-complex-provide-set))
 
-  (: ver (-> Symbol
-             xs:schema-member
-             Void))
-  (define (ver x o)
-    (verify-xs:schema-member
-     simple-table
-     complex-table
-     x
-     o))
+  (: proc (-> Symbol
+              xs:schema-member
+              Void))
+  (define (proc x o)
+    (match o
+      [(xs:element _type _min-occurs _max-occurs)
+       (with-stack-entry (stack-entry 'define-element x)
+         (verify-xs:schema-member
+          simple-table
+          complex-table
+          o))]
+      [_
+       (with-stack-entry (stack-entry 'define-type x)
+         (verify-xs:schema-member
+          simple-table
+          complex-table
+          o))]))
 
   (match schema
     [(xs:schema _target-namespace import-table body)
-     (hash-for-each body ver)]))
+     (hash-for-each body proc)]))
 
 (: validate-xs:schema (-> xs:schema
                           xs:schema))
@@ -122,7 +122,6 @@
      (verify-xs:schema-member
       (hash 'tns (set 'myType))
       (hash)
-      'e
       (xs:element (tns myType) 1 1))))
 
   (check-not-exn
@@ -130,7 +129,6 @@
      (verify-xs:schema-member
       (hash)
       (hash 'tns (set 'myType))
-      'e
       (xs:element (tns myType) 1 1))))
 
   (check-exn
@@ -139,7 +137,6 @@
      (verify-xs:schema-member
       (hash)
       (hash)
-      'e
       (xs:element (tns myType) 1 1))))
 
   (check-exn
@@ -148,7 +145,4 @@
      (verify-xs:schema-member
       (hash)
       (hash 'tns (set 'myType))
-      'e
-      (xs:element (tns myType) 1 0))))
-
-)  
+      (xs:element (tns myType) 1 0)))))  

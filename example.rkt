@@ -65,9 +65,9 @@
     ([att1 string  #f]
      [att2 integer #t])
     (all
-     (id    myStringType     1 1)
-     (oDate date             0 unbounded)
-     (month myOtherMonthType 0 1)))
+     [id    myStringType     1 1]
+     [oDate date             0 unbounded]
+     [month myOtherMonthType 0 1]))
 
   ;; complex type: simple content
   (define-type myStruct4
@@ -87,7 +87,7 @@
     
 
   (define-message op1-input-message
-    (body (: types myStruct)))
+    [body (: types myStruct1)])
   
   (define-message op1-output-message
     (body (: types state)))
@@ -98,12 +98,12 @@
 
   (define-interface firstInterface
     
-    (op1 (operation op1-input-message
-                    op1-output-message
-                    error-message))
+    [op1 (input  op1-input-message)
+         (output op1-output-message)
+         (fault  error-message)]
     
-    (op2 (operation op2-input-message
-                    op2-output-message)))
+    [op2 (input  op2-input-message)
+         (output op2-output-message)])
 
   (define-interface secondInterface))
 

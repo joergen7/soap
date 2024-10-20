@@ -36,10 +36,9 @@
      
 (: verify-wsdl:definitions-member (-> (HashTable Symbol (Setof Symbol))
                                       (Setof Symbol)
-                                      Symbol
                                       wsdl:definitions-member
                                       Void))
-(define (verify-wsdl:definitions-member provide-table message-set name o)
+(define (verify-wsdl:definitions-member provide-table message-set o)
 
   (define message-table : (HashTable Symbol (Setof Symbol))
     (hash (tns-prefix) message-set))
@@ -48,21 +47,15 @@
                       wsdl:part
                       Void))
   (define (inspect-part x part)
-    
-    (define loc : String
-      (format "message ~a/part ~a" name x))
-
-    (verify-bind provide-table loc part))
+    (with-stack-entry (stack-entry #f x)
+      (verify-bind provide-table part)))
 
   (: inspect-operation (-> Symbol
                            wsdl:operation
                            Void))
   (define (inspect-operation x operation)
-
-    (define loc : String
-      (format "interface ~a/operation ~a" name x))
-
-    (verify-bind message-table loc operation))
+    (with-stack-entry (stack-entry #f x)
+      (verify-bind message-table operation)))
                              
   (match o
 
@@ -81,19 +74,27 @@
   (define message-set : (Setof Symbol)
     (get-message-set definitions))
 
-  (: ver (-> Symbol
-             wsdl:definitions-member
-             Void))
-  (define (ver x o)
-    (verify-wsdl:definitions-member
-     provide-table
-     message-set
-     x
-     o))
+  (: proc (-> Symbol
+              wsdl:definitions-member
+              Void))
+  (define (proc x o)
+    (match o
+      [(wsdl:message _part-table)
+       (with-stack-entry (stack-entry 'define-message x)
+         (verify-wsdl:definitions-member
+          provide-table
+          message-set
+          o))]
+      [(wsdl:port-type _operation-table)
+       (with-stack-entry (stack-entry 'define-interface x)
+         (verify-wsdl:definitions-member
+          provide-table
+          message-set
+          o))]))
 
   (match definitions
     [(wsdl:definitions _target-namespace _import-table body)
-     (hash-for-each body ver)]))
+     (hash-for-each body proc)]))
      
 
 (: validate-wsdl:definitions (-> wsdl:definitions

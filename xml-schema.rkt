@@ -389,12 +389,13 @@
     (xs:element xs:string 1 1))
 
   (define x-element : XExpr
-    '(xs:element ((name "value") (type "xs:string") (minOccurs "1") (maxOccurs "1"))))
+    '(xs:element ((name "value") (type "xs:string"))))
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace" (hash) (hash 'value a-element)))
                 (list 'xs:schema '((xmlns:tns          "urn:target-namespace")
                                    (targetNamespace    "urn:target-namespace")
-                                   (elementFormDefault "qualified"))
+                                   (elementFormDefault "qualified")
+                                   (attributeFormDefault "unqualified"))
                       x-element))
 
   (check-equal? (xs->xexpr (xs:schema "urn:target-namespace"
@@ -403,7 +404,8 @@
                 (list 'xs:schema '((xmlns:tns          "urn:target-namespace")
                                    (xmlns:blub         "urn:bla")
                                    (targetNamespace    "urn:target-namespace")
-                                   (elementFormDefault "qualified"))
+                                   (elementFormDefault "qualified")
+                                   (attributeFormDefault "unqualified"))
                       '(xs:import ((namespace "urn:bla")))
                       x-element))
 
@@ -412,8 +414,9 @@
                   (xs->xexpr (xs:schema "urn:target-namespace" (hash) (hash 'value a-element))))
                   (list 'xsd:schema '((xmlns:t            "urn:target-namespace")
                                       (targetNamespace    "urn:target-namespace")
-                                      (elementFormDefault "qualified"))
-                        '(xsd:element ((name "value") (type "xsd:string") (minOccurs "1") (maxOccurs "1")))))
+                                      (elementFormDefault "qualified")
+                                      (attributeFormDefault "unqualified"))
+                        '(xsd:element ((name "value") (type "xsd:string")))))
 
   (check-equal? (xs->xexpr a-element #:name-value 'value)
                 x-element)
@@ -471,11 +474,11 @@
                 '(xs:maxLength ((value "5"))))
 
   (check-equal? (xs->xexpr (xs:complex-type (hash) (xs:all (hash))) #:name-value 'atype)
-                '(xs:complex-type ((name "atype")) (xs:all ())))
+                '(xs:complexType ((name "atype")) (xs:all ())))
 
   (check-equal? (xs->xexpr
                  (xs:complex-type (hash 'prodid (xs:attribute xs:string #f)) (xs:all (hash))) #:name-value 'atype)
-                '(xs:complex-type ((name "atype"))
+                '(xs:complexType ((name "atype"))
                                   (xs:attribute ((name "prodid")
                                                  (type "xs:string")))
                                   (xs:all ())))
@@ -496,7 +499,7 @@
                 (list 'xs:all '() x-element))
 
   (check-equal? (xs->xexpr (xs:choice 1 1 (hash)))
-                '(xs:choice ((minOccurs "1") (maxOccurs "1"))))
+                '(xs:choice ()))
 
   (check-equal? (xs->xexpr (xs:choice 2 3 (hash 'value a-element)))
                 (list 'xs:choice '((minOccurs "2") (maxOccurs "3")) x-element))

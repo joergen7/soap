@@ -43,6 +43,9 @@
  unbounded
  xs
  tns
+ input
+ output
+ fault
  (rename-out
   [display-xs:schema        display-schema]
   [display-wsdl:definitions display-service]
@@ -65,7 +68,6 @@
   [define-wsdl:definitions  define-service]
   [define-wsdl:port-type    define-interface]
   [define-wsdl:message      define-message]
-  [make-wsdl:operation      operation]
   [make-qname               :]
   [wsdl:part                part]
   ))
@@ -76,25 +78,64 @@
 (module reader syntax/module-reader
   soap)
 
+
 ;; parameters
 
 (define a-namespace : (Parameterof String)
   (make-parameter "urn:default"))
 
+(define-syntax (in-namespace stx)
+  (syntax-parse stx
+    [(_ s:str)
+     #'(a-namespace s)]))
+
+(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
+(define (hash-set-1 ht key v)
+  (when (hash-has-key? ht key)
+    (raise-user-error (format "name ~a already in use" key)))
+  (when (set-member? reserved-set key)
+    (raise-user-error (format "name ~a reserved" key)))
+  (hash-set ht key v))
+
 (define a-import-table : (Parameterof (HashTable Symbol (U xs:import xs:schema)))
-  (let ([t0 : (HashTable Symbol (U xs:import xs:schema)) (hash)])
+  (let ([t0 : (HashTable Symbol (U xs:import xs:schema))
+            (hash)])
     (make-parameter t0)))
+
+(: store-import (-> Symbol (U xs:import xs:schema) Void))
+(define (store-import x v)
+  (a-import-table (hash-set-1 (a-import-table) x v)))
 
 (define a-schema-table : (Parameterof (HashTable Symbol xs:schema-member))
-  (let ([t0 : (HashTable Symbol xs:schema-member) (hash)])
+  (let ([t0 : (HashTable Symbol xs:schema-member)
+            (hash)])
     (make-parameter t0)))
+
+(: store-schema (-> Symbol xs:schema-member Void))
+(define (store-schema x v)
+  (a-schema-table (hash-set-1 (a-schema-table) x v)))
 
 (define a-wsdl-table : (Parameterof (HashTable Symbol wsdl:definitions-member))
-  (let ([t0 : (HashTable Symbol wsdl:definitions-member) (hash)])
+  (let ([t0 : (HashTable Symbol wsdl:definitions-member)
+            (hash)])
     (make-parameter t0)))
 
+(: store-wsdl (-> Symbol wsdl:definitions-member Void))
+(define (store-wsdl x v)
+  (a-wsdl-table (hash-set-1 (a-wsdl-table) x v)))
 
-;; language extensions
+(define a-operation-table : (Parameterof (HashTable Symbol (-> qname)))
+  (let ([t0 : (HashTable Symbol (-> qname))
+            (hash)])
+    (make-parameter t0)))
+
+(: store-operation (-> Symbol (-> qname) Void))
+(define (store-operation x v)
+  (a-operation-table (hash-set-1 (a-operation-table) x v)))
+   
+
+
+;; resolve
 
 (define reserved-set : (Setof Symbol)
   (set 'boolean
@@ -119,25 +160,8 @@
     [(_ x:id) #'(resolve-qname 'x)]
     [(_ x)    #'x]))
 
-(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
-(define (hash-set-1 ht key v)
-  (when (hash-has-key? ht key)
-    (raise-user-error (format "name ~a already in use" key)))
-  (when (set-member? reserved-set key)
-    (raise-user-error (format "name ~a reserved" key)))
-  (hash-set ht key v))
 
-(: store-schema (-> Symbol xs:schema-member Void))
-(define (store-schema x v)
-  (a-schema-table (hash-set-1 (a-schema-table) x v)))
-
-(: store-import (-> Symbol (U xs:import xs:schema) Void))
-(define (store-import x v)
-  (a-import-table (hash-set-1 (a-import-table) x v)))
-
-(: store-wsdl (-> Symbol wsdl:definitions-member Void))
-(define (store-wsdl x v)
-  (a-wsdl-table (hash-set-1 (a-wsdl-table) x v)))
+;; table constructors
 
 (define-syntax (make-attribute-table stx)
   (syntax-parse stx
@@ -175,10 +199,7 @@
     [(_ (x:id e) r ...)
      #'(hash-set-1 (make-part-table r ...) 'x (assert e wsdl:part?))]))
 
-(define-syntax (in-namespace stx)
-  (syntax-parse stx
-    [(_ s:str)
-     #'(a-namespace s)]))
+;; language extensions
 
 (define-syntax (define-xs:schema stx)
   (syntax-parse stx
@@ -354,8 +375,8 @@
 
 (define-syntax (make-wsdl:port-type stx)
   (syntax-parse stx
-    [(_ r ...)
-     #'(wsdl:port-type (make-operation-table r ...))]))
+    [(_ [x:id e ...] ...)
+     #'(wsdl:port-type (make-operation-table [x (make-wsdl:operation e ...)] ...))]))
 
 (define-syntax (define-wsdl:message stx)
   (syntax-parse stx
@@ -367,11 +388,31 @@
     [(_ (x:id n) ...)
      #'(wsdl:message (make-part-table (x (wsdl:part n)) ...))]))
 
+
+(define-syntax (input stx)
+  (syntax-parse stx
+    [(_ z)
+     #'(store-operation 'input (resolve z))]))
+
+(define-syntax (output stx)
+  (syntax-parse stx
+    [(_ z)
+     #'(store-operation 'output (resolve z))]))
+
+(define-syntax (fault stx)
+  (syntax-parse stx
+    [(_ z)
+     #'(store-operation 'fault (resolve z))]))
+
 (define-syntax (make-wsdl:operation stx)
   (syntax-parse stx
-    [(_ a)     #'(wsdl:operation (resolve a) #f #f)]
-    [(_ a b)   #'(wsdl:operation (resolve a) (resolve b) #f)]
-    [(_ a b c) #'(wsdl:operation (resolve a) (resolve b) (resolve c))]))
+    [(_ e_i ...)
+     #'(parameterize ([a-operation-table (hash)])
+         e_i ...
+         (wsdl:operation
+          (hash-ref (a-operation-table) 'input (lambda () #f))
+          (hash-ref (a-operation-table) 'output (lambda () #f))
+          (hash-ref (a-operation-table) 'fault (lambda () #f))))]))
 
 
 ;; display forms
