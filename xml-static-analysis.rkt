@@ -17,7 +17,6 @@
           set-union)
  (only-in racket/string
           string-join)
- "xml-aux.rkt"
  "xml-schema.rkt"
  "xml-wsdl.rkt")
 
@@ -25,9 +24,6 @@
  with-stack-entry
  stack-entry
  hash-combine
- get-simple-provide-set
- get-complex-provide-set
- get-provide-set
  get-provide-table
  verify-occur
  verify-bind)
@@ -92,54 +88,6 @@
        
        (hash-set result x set2)])))
 
-(: get-simple-provide-set (-> (U xs:import xs:schema)
-                              (Setof Symbol)))
-(define/match (get-simple-provide-set o)
-
-  [((xs:schema _target-namespace _import-list body))
-
-   (: select-simple (-> Symbol Boolean))
-   (define (select-simple x)
-     (xs:simple-type? (hash-ref body x)))
-
-   (list->set
-    (filter select-simple (hash-keys body)))]
-    
-  [((xs:import _namespace simple-provide-set _complex-provide-set))
-   simple-provide-set])
-
-
-(: get-complex-provide-set (-> (U xs:import xs:schema)
-                               (Setof Symbol)))
-(define/match (get-complex-provide-set o)
-
-  [((xs:schema _target-namespace _import-list body))
-
-   (: select-complex (-> Symbol Boolean))
-   (define (select-complex x)
-     (xs:complex-type? (hash-ref body x)))
-
-   (list->set
-    (filter select-complex (hash-keys body)))]
-    
-  [((xs:import _namespace _simple-provide-set complex-provide-set))
-   complex-provide-set])
-
-(: get-provide-set (-> (U xs:import xs:schema)
-                       (Setof Symbol)))
-(define/match (get-provide-set o)
-
-  [((xs:schema _target-namespace _import-list body))
-
-   (: skip-element (-> Symbol Boolean))
-   (define (skip-element x)
-     (not (xs:element? (hash-ref body x))))
-
-   (list->set
-    (filter skip-element (hash-keys body)))]
-
-  [((xs:import _namespace simple-provide-set complex-provide-set))
-   (set-union simple-provide-set complex-provide-set)])
 
 (: get-provide-table (-> (U xs:schema wsdl:definitions)
                          (-> (U xs:import xs:schema) (Setof Symbol))
@@ -274,45 +222,6 @@
     (check-equal? (hash-combine t1 t2)
                   (hash 'a (set 'r 's))))
 
-  (check-equal? (get-simple-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash)))
-                (set))
-
-  (check-equal? (get-complex-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash)))
-                (set))
-
-  (check-equal? (get-simple-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash 'bla (xs:element xs:string 1 1))))
-                (set))
-
-  (check-equal? (get-complex-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash 'bla (xs:element xs:string 1 1))))
-                (set))
-
-  (check-equal? (get-simple-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash 'bla  (xs:element xs:string 1 1)
-                                  'blub (xs:simple-type (xs:restriction xs:string '()))
-                                  'foo  (xs:complex-type (hash) (xs:all (hash))))))
-                (set 'blub))
-
-  (check-equal? (get-complex-provide-set
-                 (xs:schema "urn:target-namespace"
-                            (hash)
-                            (hash 'bla (xs:element xs:string 1 1)
-                                  'blub (xs:simple-type (xs:restriction xs:string '()))
-                                  'foo (xs:complex-type (hash) (xs:all (hash))))))
-                (set 'foo))
 
   (check-equal? (get-provide-table
                  (xs:schema "urn:target-namespace"
