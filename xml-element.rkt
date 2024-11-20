@@ -1,12 +1,20 @@
 #lang typed/racket/base
 
+
 (require
  (only-in typed/xml
           XExpr)
  (only-in racket/match
-          define/match))
+          define/match
+          match)
+ "xs.rkt")
 
-(: make-xml-element (->* (Symbol)
+
+(provide
+ make-xml-element)
+
+
+(: make-xml-element (->* ((U xs:qname Symbol))
                          (#:prefix-list (Listof (Pairof Symbol String))
                           #:att-list    (Listof (Pairof Symbol String))
                           #:name-value  (U #f Symbol)
@@ -40,16 +48,24 @@
   (define a : (Pairof (Listof (List Symbol String)) (Listof XExpr))
     (cons z body))
 
+  (define n1 : Symbol
+    (match name
+            [(xs:qname _source _name) (xs:qname->symbol name)]
+            [(? symbol? _)            name]))
+
   (define result : XExpr
-    (cons name a))
+    (cons n1 a))
 
   result)
 
-(provide make-xml-element)
 
 (module+ test
 
-  (require typed/rackunit)
+  (require typed/rackunit
+           "ns.rkt")
+
+  (check-equal? (make-xml-element (xs blub))
+                '(xs:blub ()))
 
   (check-equal? (make-xml-element 'blub)
                 '(blub ()))

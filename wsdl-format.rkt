@@ -9,83 +9,18 @@
           set)
  (only-in typed/xml
           XExpr)
+ "alist.rkt"
  "xml-element.rkt"
- "xml-wsdl.rkt"
- "xml-format.rkt")
+ "wsdl.rkt"
+ "ns.rkt"
+ "tns.rkt"
+ "import-table.rkt"
+ "wsdl-member-table.rkt")
 
-#|
-(: wsdl->xexpr (->* (Any) (#:name-value (U #f Symbol)) XExpr))
-(define (wsdl->xexpr x #:name-value (name-value #f))
-
-
-  (: proc (-> Symbol Any XExpr))
-  (define (proc name elem)
-    (wsdl->xexpr elem #:name-value name))
-
-  (match x
-
-    ;; wsdl:definitions
-    [(wsdl:definitions target-namespace import-table body)
-     (let ([a-prefix-list : (Listof (Pairof Symbol String))
-                          (get-import-attribute-list import-table)]
-           [b-prefix-list : (Listof (Pairof Symbol String))
-                          (list (cons (wsdl-prefix) "http://schemas.xmlsoap.org/wsdl/")
-                                (cons (tns-prefix)  target-namespace))]
-           [a-body : (Listof XExpr)
-                   (get-import-xexpr-list import-table ((wsdl import)))]
-           [b-body : (Listof XExpr)
-                   (hash-map body proc)])
-       (make-xml-element
-        ((wsdl definitions))
-        #:prefix-list (append a-prefix-list b-prefix-list)
-        #:att-list    (list (cons 'targetNamespace target-namespace))
-        #:body        (append a-body b-body)))] 
-
-    ;; wsdl:message
-    [(wsdl:message part-table)
-     (make-xml-element
-      ((wsdl message))
-      #:name-value name-value
-      #:body       (hash-map part-table proc))]
-
-    ;; wsdl:part
-    [(wsdl:part type)
-     (make-xml-element
-      ((wsdl part))
-      #:name-value name-value
-      #:att-list (list (cons 'type (qname->string (type)))))]
-
-    ;; wsdl:port-type
-    [(wsdl:port-type operation-table)
-     (make-xml-element
-      ((wsdl portType))
-      #:name-value name-value
-      #:body       (hash-map operation-table proc))]
-
-    ;; wsdl:operation
-    [(wsdl:operation input output fault)
-     (let ([input-list : (Listof XExpr)
-                       (if input
-                           (list (make-xml-element ((wsdl input)) #:att-list (list (cons 'message (qname->string (input))))))
-                           '())]
-           [output-list : (Listof XExpr)
-                        (if output
-                            (list (make-xml-element ((wsdl output)) #:att-list (list (cons 'message (qname->string (output))))))
-                            '())]
-           [fault-list : (Listof XExpr)
-                       (if fault
-                           (list (make-xml-element ((wsdl fault)) #:att-list (list (cons 'message (qname->string (fault))))))
-                           '())])
-
-       (make-xml-element
-        ((wsdl operation))
-        #:name-value name-value
-        #:body       (append
-                      input-list
-                      output-list
-                      fault-list)))]))
-
-|#
+(provide
+ wsdl:formattable
+ wsdl:formattable?
+ wsdl:wsdl->xexpr)
 
 (define-type wsdl:formattable
   (U wsdl:definitions
@@ -94,15 +29,30 @@
      wsdl:port-type
      wsdl:operation))
 
+(define-predicate wsdl:formattable?
+  wsdl:formattable)
+
 (: wsdl:wsdl->xexpr (-> wsdl:formattable
                         XExpr))
 (define/match (wsdl:wsdl->xexpr o)
 
   ;; wsdl:definitions
-  [((wsdl:definitions namespace body))
+  [((wsdl:definitions name namespace body))
 
-   (define import-table : (Listof (Pairof Symbol String))
-     (xs:collect-import-table o))
+   (define member-table : (Alistof wsdl:definitions-member)
+     (alist-apply-union
+      wsdl:collect-member-table
+      body))
+
+   (define xml-body : (Listof XExpr)
+     (for/list ([p : (Pairof Symbol wsdl:definitions-member)
+                   (in-list member-table)])
+       (match p
+         [(cons _name m)
+          (wsdl:wsdl->xexpr m)])))
+   
+   (define import-table : (Alistof String)
+     (xml:collect-import-table o))
 
    (define import-body : (Listof XExpr)
      (for/fold ([result : (Listof XExpr)
@@ -115,23 +65,19 @@
               result
               (cons
                (make-xml-element
-                'wsdl:import
+                (wsdl import)
+                #:name-value name
                 #:att-list (list
                             (cons 'namespace ns)))
                result))])))
 
-   (define xml-body : (Listof XExpr)
-     (for/list ([x : wsdl:definitions-member
-                   (in-set body)])
-       (wsdl:wsdl->xexpr x)))
-   
    (make-xml-element
-    'wsdl:definitions
-    #:prefix-list (xs:extend-import-table
+    (wsdl definitions)
+    #:prefix-list (xml:extend-import-table
                    import-table
                    namespace
-                   xml:prefix-wsdl
-                   xml:prefix-soap)
+                   wsdl:prefix
+                   soap:prefix)
     #:att-list (list
                 (cons 'targetNamespace namespace))
     #:body     (append import-body
@@ -146,7 +92,7 @@
        (wsdl:wsdl->xexpr part)))
      
    (make-xml-element
-    'wsdl:message
+    (wsdl message)
     #:att-list (list
                 (cons 'name (symbol->string name)))
     #:body xml-body)]
@@ -155,7 +101,7 @@
   [((wsdl:part name type))
 
    (make-xml-element
-    'wsdl:part
+    (wsdl part)
     #:name-value name
     #:att-list (list
                 (cons 'type (xs:type->string type))))]
@@ -169,7 +115,7 @@
        (wsdl:wsdl->xexpr x)))
    
    (make-xml-element
-    'wsdl:portType
+    (wsdl portType)
     #:name-value name
     #:body xml-body)]
 
@@ -188,7 +134,7 @@
          (make-xml-element
           key
           #:att-list (list
-                      (cons 'message (xs:type->string msg)))))]))
+                      (cons 'message (wsdl:message->string msg)))))]))
 
    (define input-list : (Listof XExpr)
      (proc 'wsdl:input input))
@@ -200,7 +146,7 @@
      (proc 'wsdl:fault fault))
 
    (make-xml-element
-    'wsdl:operation
+    (wsdl operation)
     #:name-value name
     #:body (append
             input-list
@@ -281,7 +227,7 @@
       (wsdl:operation 'op2 #f #f #f))))
    '(wsdl:portType ((name "myport"))
                    (wsdl:operation ((name "op1")))
-                   (wsdl:operation ((name "op2")))))
+                   (wsdl:operation ((name "op2"))))))
 
 
            

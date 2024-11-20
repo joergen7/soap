@@ -3,419 +3,60 @@
 (require
  (for-syntax
   (only-in racket/base
-           syntax
-           let
-           #%datum)
+           syntax)
   (only-in syntax/parse
            syntax-parse
-           boolean
            id
-           str
-           integer
-           number))
+           str))
+ (only-in racket/set
+          set
+          list->set)
  (only-in typed/xml
-          XExpr
-          xexpr->string
+          empty-tag-shorthand
           display-xml
           document
           prolog
           xexpr->xml
           element?
-          empty-tag-shorthand)
- (only-in racket/set
-          set
-          set-member?)
- "xml-aux.rkt"
- "xml-schema.rkt"
- "xml-schema-validate.rkt"
- "xml-wsdl.rkt"
- "xml-wsdl-validate.rkt")
+          XExpr)
+ "xs.rkt"
+ "xs-format.rkt"
+ "wsdl.rkt"
+ "wsdl-format.rkt"
+ "ns.rkt")
 
 (provide
- #%top-interaction
- #%app
- #%top
- #%datum
  #%module-begin
- provide
- with-output-file
- in-namespace
- unbounded
- xs
- tns
- input
- output
- fault
- (rename-out
-  [display-xs:schema        display-schema]
-  [display-wsdl:definitions display-service]
-  [define-xs:schema         define-schema]
-  [define-xs:element        define-element]
-  [define-xs:type           define-type]
-  [define-xs:import         import]
-  [make-xs:all              all]
-  [make-xs:choice           choice]
-  [xs:min-inclusive         min-inclusive]
-  [xs:min-exclusive         min-exclusive]
-  [xs:max-inclusive         max-inclusive]
-  [xs:max-exclusive         max-exclusive]
-  [xs:length                length]
-  [xs:min-length            min-length]
-  [xs:max-length            max-length]
-  [make-xs:range            range]
-  [make-xs:enum             enum]
-  [make-xs:pattern          pattern]
-  [define-wsdl:definitions  define-service]
-  [define-wsdl:port-type    define-interface]
-  [define-wsdl:message      define-message]
-  [make-qname               :]
-  [wsdl:part                part]
-  ))
+ #%top-interaction
+ #%datum
+ #%top
+ #%app
+ provide)
 
 
-;; reader module
+
+ ;; reader module
+;;------------------------------------------------------------
 
 (module reader syntax/module-reader
   soap)
 
-
-;; parameters
+;; in-namespace
+;;------------------------------------------------------------
 
 (define a-namespace : (Parameterof String)
   (make-parameter "urn:default"))
 
 (define-syntax (in-namespace stx)
   (syntax-parse stx
-    [(_ s:str)
-     #'(a-namespace s)]))
+    [(_ ns:str)
+     #'(a-namespace ns)]))
 
-(: hash-set-1 (All (a b) (-> (HashTable a b) a b (HashTable a b))))
-(define (hash-set-1 ht key v)
-  (when (hash-has-key? ht key)
-    (raise-user-error (format "name ~a already in use" key)))
-  (when (set-member? reserved-set key)
-    (raise-user-error (format "name ~a reserved" key)))
-  (hash-set ht key v))
+(provide in-namespace)
 
-(define a-import-table : (Parameterof (HashTable Symbol (U xs:import xs:schema)))
-  (let ([t0 : (HashTable Symbol (U xs:import xs:schema))
-            (hash)])
-    (make-parameter t0)))
-
-(: store-import (-> Symbol (U xs:import xs:schema) Void))
-(define (store-import x v)
-  (a-import-table (hash-set-1 (a-import-table) x v)))
-
-(define a-schema-table : (Parameterof (HashTable Symbol xs:schema-member))
-  (let ([t0 : (HashTable Symbol xs:schema-member)
-            (hash)])
-    (make-parameter t0)))
-
-(: store-schema (-> Symbol xs:schema-member Void))
-(define (store-schema x v)
-  (a-schema-table (hash-set-1 (a-schema-table) x v)))
-
-(define a-wsdl-table : (Parameterof (HashTable Symbol wsdl:definitions-member))
-  (let ([t0 : (HashTable Symbol wsdl:definitions-member)
-            (hash)])
-    (make-parameter t0)))
-
-(: store-wsdl (-> Symbol wsdl:definitions-member Void))
-(define (store-wsdl x v)
-  (a-wsdl-table (hash-set-1 (a-wsdl-table) x v)))
-
-(define a-operation-table : (Parameterof (HashTable Symbol (-> qname)))
-  (let ([t0 : (HashTable Symbol (-> qname))
-            (hash)])
-    (make-parameter t0)))
-
-(: store-operation (-> Symbol (-> qname) Void))
-(define (store-operation x v)
-  (a-operation-table (hash-set-1 (a-operation-table) x v)))
-   
-
-
-;; resolve
-
-(define reserved-set : (Setof Symbol)
-  (set 'boolean
-       'date
-       'dateTime
-       'decimal
-       'integer
-       'nonNegativeInteger
-       'NMTOKEN
-       'string
-       'token
-       'unsignedShort))
-
-(: resolve-qname (-> Symbol (-> qname)))
-(define (resolve-qname name)
-  (if (set-member? reserved-set name)
-      (lambda () (qname (xs-prefix) name))
-      (lambda () (qname (tns-prefix) name))))
-
-(define-syntax (resolve stx)
-  (syntax-parse stx
-    [(_ x:id) #'(resolve-qname 'x)]
-    [(_ x)    #'x]))
-
-
-;; table constructors
-
-(define-syntax (make-attribute-table stx)
-  (syntax-parse stx
-
-    [(_)
-     #'(let ([t : (HashTable Symbol xs:attribute) (hash)]) t)]
-
-    [(_ (x:id e) r ...)
-     #'(hash-set-1 (make-attribute-table r ...) 'x (assert e xs:attribute?))]))
-
-(define-syntax (make-element-table stx)
-  (syntax-parse stx
-
-    [(_)
-     #'(let ([t : (HashTable Symbol xs:element) (hash)]) t)]
-    
-    [(_ (x:id e) r ...)
-     #'(hash-set-1 (make-element-table r ...) 'x (assert e xs:element?))]))
-
-(define-syntax (make-operation-table stx)
-  (syntax-parse stx
-
-    [(_)
-     #'(let ([t : (HashTable Symbol wsdl:operation) (hash)]) t)]
-
-    [(_ (x:id e) r ...)
-     #'(hash-set-1 (make-operation-table r ...) 'x (assert e wsdl:operation?))]))
-
-(define-syntax (make-part-table stx)
-  (syntax-parse stx
-
-    [(_)
-     #'(let ([t : (HashTable Symbol wsdl:part) (hash)]) t)]
-
-    [(_ (x:id e) r ...)
-     #'(hash-set-1 (make-part-table r ...) 'x (assert e wsdl:part?))]))
-
-;; language extensions
-
-(define-syntax (define-xs:schema stx)
-  (syntax-parse stx
-    [(_ x:id e_i ...)
-     #'(define x : xs:schema
-         (make-xs:schema
-          (store-import
-           (xs-prefix)
-           (xs:import
-            "http://www.w3.org/2001/XMLSchema"
-            reserved-set
-            (set)))
-          e_i ...))]))
-
-(define-syntax (make-xs:schema stx)
-  (syntax-parse stx
-    [(_ e_i ...)
-     #'(parameterize ([a-import-table (hash)]
-                      [a-schema-table (hash)])
-         e_i ...
-         (validate-xs:schema
-          (xs:schema
-           (a-namespace)
-           (a-import-table)
-           (a-schema-table))))]))
-
-(define-syntax (define-xs:import stx)
-  (syntax-parse stx
-    
-    ;; local import
-    [(_ x:id a:id)
-     #'(store-import 'x a)]
-
-    ;; foreign import
-    [(_ x:id e ...)
-     #'(store-import 'x (make-xs:import e ...))]))
-
-
-(define-syntax (make-xs:import stx)
-  (syntax-parse stx
-    
-    ;; foreign import without declarations
-    [(_ s:str)
-     #'(make-xs:import s () ())]
-    
-    ;; Foreign import with declarations
-    [(_ s:str (s_i:id ...) (c_i:id ...))
-     #'(xs:import s (set 's_i ...) (set 'c_i ...))]))
-
-(define-syntax (define-xs:element stx)
-  (syntax-parse stx
-    [(_ x:id y:id)
-     #'(store-schema
-        'x
-        (make-xs:element (resolve y)))]))
-
-(: make-xs:element (-> (-> qname) xs:element))
-(define (make-xs:element qn)
-  (xs:element qn 1 1))
-        
-
-(define-syntax (define-xs:type stx)
-  (syntax-parse stx
-    [(_ x:id e_i ...)
-     #'(store-schema
-        'x
-        (make-xs:type e_i ...))]))
-
-(: make-xs:range (-> Real Real xs:simple-type))
-(define (make-xs:range lo hi)
-  (when (> lo hi)
-    (raise-user-error "invalid range: [~a, ~a]" lo hi))
-  (xs:simple-type
-   (xs:restriction
-    (if (and (exact-integer? lo)
-             (exact-integer? hi))
-        xs:integer
-        xs:decimal)
-    (list (xs:min-inclusive lo)
-          (xs:max-inclusive hi)))))
-
-(: make-xs:enum (-> String * xs:simple-type))
-(define (make-xs:enum . s-list)
-  (xs:simple-type
-   (xs:restriction
-    xs:string
-    (map xs:enumeration s-list))))
-
-(: make-xs:pattern (-> String xs:simple-type))
-(define (make-xs:pattern p)
-  (xs:simple-type
-   (xs:restriction
-    xs:string
-    (list (xs:pattern p)))))
-
-(: make-xs:simple-type (-> (U (-> qname) xs:simple-type) xs:restriction-member * xs:simple-type))
-(define (make-xs:simple-type head . tail)
-  (cond
-    [(xs:simple-type? head)
-     head]
-    [else
-     (xs:simple-type (xs:restriction head tail))]))
-
-(: make-xs:complex-type-member (-> (U xs:all xs:choice (-> qname)) xs:complex-type-member))
-(define (make-xs:complex-type-member e)
-  (cond
-    [(xs:all? e)      e]
-    [(xs:choice? e)   e]
-    [else             (xs:restriction e '())]))
-  
-
-(define-syntax (make-xs:type stx)
-  (syntax-parse stx
-
-    ;; complex type with body
-    [(_ ((a_i:id t_i r_i:boolean) ...) e)
-     #'(xs:complex-type
-        (make-attribute-table (a_i (xs:attribute (resolve t_i) r_i)) ...)
-        (make-xs:complex-type-member (resolve e)))]
-
-    ;; complex type no body
-    [(_ ((a_i:id t_i r_i:boolean) ...))
-     #'(xs:complex-type
-        (make-attribute-table (a_i (xs:attribute (resolve t_i) r_i)) ...)
-        #f)]
-
-    ;; simple type
-    [(_ head e_i ...)
-     #'(make-xs:simple-type (resolve head) e_i ...)]))
-
-
-                               
-
-(define-syntax (make-xs:all stx)
-  (syntax-parse stx
-    [(_ (x_i:id type_i hi_i lo_i) ...)
-     #'(xs:all
-        (make-element-table
-         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
-         
-(define-syntax (make-xs:choice stx)
-  (syntax-parse stx
-    [(_ hi lo (x_i:id type_i hi_i lo_i) ...)
-     #'(xs:choice
-        hi
-        lo
-        (make-element-table
-         (x_i (xs:element (resolve type_i) hi_i lo_i)) ...))]))
-
-(define-syntax (define-wsdl:definitions stx)
-  (syntax-parse stx
-    [(_ x:id e_i ...)
-     #'(define x : wsdl:definitions
-         (make-wsdl:definitions
-          e_i ...))]))
-
-(define-syntax (make-wsdl:definitions stx)
-  (syntax-parse stx
-    [(_ e_i ...)
-     #'(parameterize ([a-import-table (hash)]
-                      [a-wsdl-table   (hash)])
-         e_i ...
-         (validate-wsdl:definitions
-          (wsdl:definitions
-           (a-namespace)
-           (a-import-table)
-           (a-wsdl-table))))]))
-                 
-(define-syntax (define-wsdl:port-type stx)
-  (syntax-parse stx
-    [(_ x:id r ...)
-     #'(store-wsdl 'x (make-wsdl:port-type r ...))]))
-
-(define-syntax (make-wsdl:port-type stx)
-  (syntax-parse stx
-    [(_ [x:id e ...] ...)
-     #'(wsdl:port-type (make-operation-table [x (make-wsdl:operation e ...)] ...))]))
-
-(define-syntax (define-wsdl:message stx)
-  (syntax-parse stx
-    [(_ x:id r ...)
-     #'(store-wsdl 'x (make-wsdl:message r ...))]))
-
-(define-syntax (make-wsdl:message stx)
-  (syntax-parse stx
-    [(_ (x:id n) ...)
-     #'(wsdl:message (make-part-table (x (wsdl:part n)) ...))]))
-
-
-(define-syntax (input stx)
-  (syntax-parse stx
-    [(_ z)
-     #'(store-operation 'input (resolve z))]))
-
-(define-syntax (output stx)
-  (syntax-parse stx
-    [(_ z)
-     #'(store-operation 'output (resolve z))]))
-
-(define-syntax (fault stx)
-  (syntax-parse stx
-    [(_ z)
-     #'(store-operation 'fault (resolve z))]))
-
-(define-syntax (make-wsdl:operation stx)
-  (syntax-parse stx
-    [(_ e_i ...)
-     #'(parameterize ([a-operation-table (hash)])
-         e_i ...
-         (wsdl:operation
-          (hash-ref (a-operation-table) 'input (lambda () #f))
-          (hash-ref (a-operation-table) 'output (lambda () #f))
-          (hash-ref (a-operation-table) 'fault (lambda () #f))))]))
-
-
-;; display forms
+;;=============================================================
+;; Display Forms
+;;============================================================
 
 (: display-xexpr (-> XExpr Void))
 (define (display-xexpr e)
@@ -425,13 +66,13 @@
                (assert (xexpr->xml e) element?)
                '()))))
 
-(: display-xs:schema (-> xs:schema Void))
-(define (display-xs:schema e)
-  (display-xexpr (xs->xexpr e)))
+(: display-schema (-> xs:schema Void))
+(define (display-schema e)
+  (display-xexpr (xs:xs->xexpr e)))
 
-(: display-wsdl:definitions (-> wsdl:definitions Void))
-(define (display-wsdl:definitions e)
-  (display-xexpr (wsdl->xexpr e)))
+(: display-service (-> wsdl:definitions Void))
+(define (display-service e)
+  (display-xexpr (wsdl:wsdl->xexpr e)))
 
 (define-syntax (with-output-file stx)
   (syntax-parse stx
@@ -444,7 +85,257 @@
          #:mode   'text
          #:exists 'replace)]))
 
+(provide
+ display-schema
+ display-service
+ with-output-file)
+
+;;============================================================
+;; Schema Language
+;;============================================================
+
+(define-syntax (make-xs:element stx)
+  (syntax-parse stx
+    [(_ name:id type lo hi)
+     #'(xs:element 'name type lo hi)]))
+
+(define-syntax (make-xs:attribute stx)
+  (syntax-parse stx
+    [(_ name:id type required)
+     #'(xs:attribute 'name type required)]))
 
 
+;; define-schema
+;;------------------------------------------------------------
+
+(define-syntax (define-schema stx)
+  (syntax-parse stx
+    [(_ name x ...)
+     #'(define name : xs:schema
+         (xs:schema 'name (a-namespace) (set x ...)))]))
+
+(provide define-schema)
+
+;; import
+;;------------------------------------------------------------
+
+(define-syntax (import stx)
+  (syntax-parse stx
+    [(_ prefix:id ns:str (x:id ...) (y:id ...))
+     #'(define-values (x ... y ...)
+         (values
+          (xs:qname
+           (xs:import 'prefix ns (set 'x ...) (set 'y ...))
+           'x) ...
+          (xs:qname
+           (xs:import 'prefix ns (set 'x ...) (set 'y ...))
+           'y) ...))]))
+
+(provide import)
+
+;; define-type
+;;------------------------------------------------------------
+
+(define-syntax (define-type stx)
+  (syntax-parse stx
+    ;; complex type - no body
+    [(_ name:id ([name_i type_i required_i] ...))
+     #'(define name : xs:complex-type
+         (xs:complex-type 'name
+                          (set (make-xs:attribute name_i type_i required_i) ...)
+                          #f))]
+
+    ;; complex type - with body
+    [(_ name:id ([name_i type_i required_i] ...) body)
+     #'(define name : xs:complex-type
+         (xs:complex-type 'name
+                          (set (make-xs:attribute name_i type_i required_i) ...)
+                          body))]
+
+    ;; simple type or qname
+    [(_ name:id restriction)
+     #'(define name : xs:simple-type
+         (xs:simple-type 'name
+                         restriction))]))
 
 
+(provide define-type)
+
+;; all
+;;------------------------------------------------------------
+
+(define-syntax (all stx)
+  (syntax-parse stx
+    [(_ [x ...] ...)
+     #'(xs:all (set [make-xs:element x ...] ...))]))
+
+(provide all)
+
+;; choice
+;;------------------------------------------------------------
+
+(define-syntax (choice stx)
+  (syntax-parse stx
+    [(_ lo hi (x ...) ...)
+     #'(xs:choice lo hi (set (make-xs:element x ...) ...))]))
+
+(provide choice)
+
+;; as
+;;------------------------------------------------------------
+
+(: as (-> (U xs:qname xs:simple-type)
+          xs:restriction-member *
+          xs:restriction))
+(define (as base . x-list)
+  (xs:restriction base (list->set x-list)))
+
+(provide as)
+
+;; pattern
+;;------------------------------------------------------------
+
+(: pattern (-> String xs:restriction))
+(define (pattern p)
+  (xs:restriction (xs string) (set (xs:pattern p))))
+
+(provide pattern)
+
+;; range
+;;------------------------------------------------------------
+
+(: range (-> Real
+             Real
+             xs:restriction))
+(define (range lo hi)
+
+  (when (> lo hi)
+    (raise-argument-error 'range "invalid range" (list lo hi)))
+
+  (xs:restriction
+   (if (and (exact-integer? lo)
+            (exact-integer? hi))
+       (xs integer)
+       (xs decimal))
+       (set (xs:min-inclusive lo)
+            (xs:max-inclusive hi))))
+
+(provide range)
+
+;; enum
+;;------------------------------------------------------------
+
+(: enum (-> String * xs:restriction))
+(define (enum . s-list)
+  (xs:restriction
+   (xs string)
+   (list->set
+    (map xs:enumeration s-list))))
+
+(provide enum)
+
+;; Shortcuts
+;;------------------------------------------------------------
+
+(define unbounded : False
+  #f)
+
+(define required : Boolean
+  #t)
+
+(define optional : Boolean
+  #f)
+
+(define string : xs:qname
+  (xs string))
+
+(define date : xs:qname
+  (xs date))
+
+(define integer : xs:qname
+  (xs integer))
+
+(provide
+ unbounded
+ required
+ optional
+ string
+ date
+ integer)
+
+;;============================================================
+;; Service Language
+;;============================================================
+
+;; define-service
+;;------------------------------------------------------------
+
+(define-syntax (define-service stx)
+  (syntax-parse stx
+    [(_ name:id x ...)
+     #'(define name : wsdl:definitions
+         (wsdl:definitions 'name (a-namespace) (set x ...)))]))
+
+(provide define-service)
+
+;; define-message
+;;------------------------------------------------------------
+
+(define-syntax (define-message stx)
+  (syntax-parse stx
+    [(_ name:id [part-name:id part-type] ...)
+     #'(define name : wsdl:message
+         (wsdl:message 'name (set (wsdl:part 'part-name part-type) ...)))]))
+
+(provide define-message)
+
+;; define-interface
+;;------------------------------------------------------------
+
+(define a-input : (Parameterof (U False wsdl:message))
+  (make-parameter #f))
+
+(define-syntax (with-input stx)
+  (syntax-parse stx
+    [(_ x:id z_i ...)
+     #'(parameterize ([a-input x])
+         z_i ...)]))
+  
+(define a-output : (Parameterof (U False wsdl:message))
+  (make-parameter #f))
+
+(define-syntax (with-output stx)
+  (syntax-parse stx
+    [(_ x:id z_i ...)
+     #'(parameterize ([a-output x])
+         z_i ...)]))
+  
+(define a-fault : (Parameterof (U False wsdl:message))
+  (make-parameter #f))
+
+(define-syntax (with-fault stx)
+  (syntax-parse stx
+    [(_ x:id z_i ...)
+     #'(parameterize ([a-fault x])
+         z_i ...)]))
+  
+(define-syntax (define-interface stx)
+  (syntax-parse stx
+    [(_ name:id op_i ...)
+     #'(define name : wsdl:port-type
+         (wsdl:port-type
+          'name
+          (set
+           op_i ...)))]))
+
+(define-syntax (op stx)
+  (syntax-parse stx
+    [(_ name:id)
+     #'(wsdl:operation 'name (a-input) (a-output) (a-fault))]))
+
+(provide
+ with-input
+ with-output
+ with-fault
+ define-interface
+ op)

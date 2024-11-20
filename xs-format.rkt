@@ -9,22 +9,27 @@
           in-set)
  (only-in typed/xml
           XExpr)
- "xml-schema.rkt"
- "xml-format.rkt"
- "xml-element.rkt")
+ "alist.rkt"
+ "xs.rkt"
+ "ns.rkt"
+ "tns.rkt"
+ "import-table.rkt"
+ "xml-element.rkt"
+ "xs-member-table.rkt")
+
 
 ;; xs:get-occur-list
 ;;------------------------------------------------------------
 
 (: xs:get-occur-list (-> Nonnegative-Integer
                       (U #f Nonnegative-Integer)
-                      (Listof (Pairof Symbol String))))
+                      (Alistof String)))
 (define (xs:get-occur-list min-occurs max-occurs)
-  (let ([l1 : (Listof (Pairof Symbol String))
+  (let ([l1 : (Alistof String)
             (if (= min-occurs 1)
                 '()
                 (list (cons 'minOccurs (number->string min-occurs))))]
-        [l2 : (Listof (Pairof Symbol String))
+        [l2 : (Alistof String)
             (if (and (= min-occurs 1)
                      max-occurs
                      (= max-occurs 1))
@@ -73,9 +78,9 @@
   ;; xs:schema
   [((xs:schema name namespace body))
 
-   (define member-table : (Listof (Pairof Symbol xs:schema-member))
-     (xml:alist-apply-union
-      xml:collect-member-table
+   (define member-table : (Alistof xs:schema-member)
+     (alist-apply-union
+      xs:collect-member-table
       body))
 
    (define xml-body : (Listof XExpr)
@@ -85,8 +90,8 @@
          [(cons _name m)
           (xs:xs->xexpr m)])))
 
-   (define import-table : (Listof (Pairof Symbol String))
-     (xs:collect-import-table o))
+   (define import-table : (Alistof String)
+     (xml:collect-import-table o))
 
    (define import-body : (Listof XExpr)
      (for/fold ([result : (Listof XExpr)
@@ -99,18 +104,18 @@
               result
               (cons
                (make-xml-element
-                'xs:import
+                (xs import)
                 #:att-list (list
                             (cons 'namespace ns)))
                result))])))
 
    (make-xml-element
-    'xs:schema
+    (xs schema)
     #:name-value  name
-    #:prefix-list (xs:extend-import-table
+    #:prefix-list (xml:extend-import-table
                    import-table
                    namespace
-                   xml:prefix-xs)
+                   xs:prefix)
     #:att-list    (list
                    (cons 'targetNamespace      namespace)
                    (cons 'elementFormDefault   "qualified")
@@ -126,7 +131,7 @@
      (xs:type->string type))
 
    (make-xml-element
-    'xs:element
+    (xs element)
     #:name-value name
     #:att-list   (append
                   (list
@@ -139,7 +144,7 @@
   ;; xs:simple-type
   [((xs:simple-type name restriction))
    (make-xml-element
-    'xs:simpleType
+    (xs simpleType)
     #:name-value name
     #:body       (list
                   (xs:xs->xexpr restriction)))]
@@ -153,7 +158,7 @@
        (xs:xs->xexpr x)))
 
    (make-xml-element
-    'xs:restriction
+    (xs restriction)
     #:att-list (list
                 (cons 'base (xs:type->string base)))
     #:body     xml-body)]
@@ -162,7 +167,7 @@
   [((xs:min-inclusive value))
 
    (make-xml-element
-    'xs:minInclusive
+    (xs minInclusive)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -170,7 +175,7 @@
   [((xs:min-exclusive value))
 
    (make-xml-element
-    'xs:minExclusive
+    (xs minExclusive)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -178,7 +183,7 @@
   [((xs:max-inclusive value))
 
    (make-xml-element
-    'xs:maxInclusive
+    (xs maxInclusive)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -186,7 +191,7 @@
   [((xs:max-exclusive value))
 
    (make-xml-element
-    'xs:maxExclusive
+    (xs maxExclusive)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -194,7 +199,7 @@
   [((xs:enumeration value))
 
    (make-xml-element
-    'xs:enumeration
+    (xs enumeration)
     #:att-list (list
                 (cons 'value value)))]
 
@@ -202,7 +207,7 @@
   [((xs:pattern value))
 
    (make-xml-element
-    'xs:pattern
+    (xs pattern)
     #:att-list (list
                 (cons 'value value)))]
 
@@ -210,7 +215,7 @@
   [((xs:length value))
 
    (make-xml-element
-    'xs:length
+    (xs length)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -218,7 +223,7 @@
   [((xs:min-length value))
 
    (make-xml-element
-    'xs:minLength
+    (xs minLength)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -226,7 +231,7 @@
   [((xs:max-length value))
 
    (make-xml-element
-    'xs:maxLength
+    (xs maxLength)
     #:att-list (list
                 (cons 'value (number->string value))))]
 
@@ -244,7 +249,7 @@
          '()))
 
    (make-xml-element
-    'xs:complexType
+    (xs complexType)
     #:name-value name
     #:body       (append l1 l2))]
 
@@ -257,13 +262,13 @@
        (xs:xs->xexpr x)))
 
    (make-xml-element
-    'xs:all
+    (xs all)
     #:body xml-body)]
 
   ;; xs:choice
   [((xs:choice min-occurs max-occurs element-set))
 
-   (define occur-list : (Listof (Pairof Symbol String))
+   (define occur-list : (Alistof String)
      (xs:get-occur-list min-occurs max-occurs))
 
    (define xml-body : (Listof XExpr)
@@ -272,25 +277,25 @@
        (xs:xs->xexpr x)))
 
    (make-xml-element
-    'xs:choice
+    (xs choice)
     #:att-list occur-list
     #:body     xml-body)]
   
   ;; xs:attribute
   [((xs:attribute name type required))
 
-   (define l1 : (Listof (Pairof Symbol String))
+   (define l1 : (Alistof String)
      (list
       (cons 'type (xs:type->string type))))
 
-   (define l2 : (Listof (Pairof Symbol String))
+   (define l2 : (Alistof String)
      (if required
          (list
           (cons 'use "required"))
          '()))
    
    (make-xml-element
-    'xs:attribute
+    (xs attribute)
     #:name-value name
     #:att-list   (append l1 l2))])
 
