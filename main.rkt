@@ -61,7 +61,7 @@
 
 (: display-xexpr (-> XExpr Void))
 (define (display-xexpr e)
-  (parameterize ([empty-tag-shorthand 'always])
+  (parameterize ([empty-tag-shorthand xml:shorthand-list])
     (display-xml
      (document (prolog '() #f '())
                (assert (xexpr->xml e) element?)
@@ -314,6 +314,13 @@
 ;; define-interface
 ;;------------------------------------------------------------
 
+(: wsdl:operation-set-union (-> (Setof wsdl:operation) *
+                                (Setof wsdl:operation)))
+(define (wsdl:operation-set-union . set-list)
+  (if (null? set-list)
+      (set)
+      (apply set-union set-list)))
+
 (define a-input : (Parameterof (U False wsdl:message))
   (make-parameter #f))
 
@@ -321,7 +328,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-input x])
-         (set-union z_i ...))]))
+         (wsdl:operation-set-union z_i ...))]))
   
 (define a-output : (Parameterof (U False wsdl:message))
   (make-parameter #f))
@@ -330,7 +337,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-output x])
-         (set-union z_i ...))]))
+         (wsdl:operation-set-union z_i ...))]))
   
 (define a-fault : (Parameterof (U False wsdl:message))
   (make-parameter #f))
@@ -339,7 +346,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-fault x])
-         (set-union z_i ...))]))
+         (wsdl:operation-set-union z_i ...))]))
   
 (define-syntax (define-interface stx)
   (syntax-parse stx
@@ -347,8 +354,7 @@
      #'(define name : wsdl:port-type
          (wsdl:port-type
           'name
-          (set-union
-           op_i ...)))]))
+          (wsdl:operation-set-union op_i ...)))]))
 
 (define-syntax (op stx)
   (syntax-parse stx

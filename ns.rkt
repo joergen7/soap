@@ -113,3 +113,31 @@
 
 (provide soap)
 
+
+;; xml:shorthand-list
+;;------------------------------------------------------------
+
+(define xml:shorthand-list : (Listof Symbol)
+  (map
+   xs:qname->symbol
+   (list
+    (xs import)
+    (xs element)
+    (xs minInclusive)
+    (xs minExclusive)
+    (xs maxInclusive)
+    (xs maxExclusive)
+    (xs enumeration)
+    (xs pattern)
+    (xs length)
+    (xs minLength)
+    (xs maxLength)
+    (xs attribute)
+    (wsdl input)
+    (wsdl output)
+    (wsdl fault)
+    (wsdl part)
+    )))
+
+
+(provide xml:shorthand-list)
