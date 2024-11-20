@@ -58,7 +58,7 @@
      (for/fold ([result : (Listof XExpr)
                         '()])
                ([pair : (Pairof Symbol String)
-                      (in-list import-table)])
+                      (in-list (xml:extend-import-table import-table namespace))])
        (match pair
          [(cons prf ns)
           (if (hash-has-key? xml:prefix-table prf)
@@ -66,7 +66,6 @@
               (cons
                (make-xml-element
                 (wsdl import)
-                #:name-value name
                 #:att-list (list
                             (cons 'namespace ns)))
                result))])))

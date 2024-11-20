@@ -76,15 +76,28 @@
      (list (cons 'pt pt))))
 
   (let* ([op : wsdl:operation
-             (wsdl:operation 'op1 #f #f #f)]
+             (wsdl:operation 'op #f #f #f)]
          [pt : wsdl:port-type
              (wsdl:port-type 'pt (set op))])
     (check-equal?
      (wsdl:collect-member-table pt)
      (list (cons 'pt pt))))
 
+
+  (let* ([op1 : wsdl:operation
+              (wsdl:operation 'op1 #f #f #f)]
+         [op2 : wsdl:operation
+              (wsdl:operation 'op2 #f #f #f)]
+         [pt : wsdl:port-type
+             (wsdl:port-type 'pt (set op1 op2))])
+    (check-equal?
+     (wsdl:collect-member-table pt)
+     (list (cons 'pt pt))))
+
+
+
   (let ([op : wsdl:operation
-            (wsdl:operation 'op1 #f #f #f)])
+            (wsdl:operation 'op #f #f #f)])
     (check-equal?
      (wsdl:collect-member-table op)
      '()))

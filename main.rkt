@@ -9,8 +9,9 @@
            id
            str))
  (only-in racket/set
+          list->set
           set
-          list->set)
+          set-union)
  (only-in typed/xml
           empty-tag-shorthand
           display-xml
@@ -237,31 +238,52 @@
 ;; Shortcuts
 ;;------------------------------------------------------------
 
-(define unbounded : False
+(define _unbounded : False
   #f)
 
-(define required : Boolean
+(define _required : Boolean
   #t)
 
-(define optional : Boolean
+(define _optional : Boolean
   #f)
 
-(define string : xs:qname
+(define _string : xs:qname
   (xs string))
 
-(define date : xs:qname
+(define _date : xs:qname
   (xs date))
 
-(define integer : xs:qname
+(define _integer : xs:qname
   (xs integer))
 
+(define _NMTOKEN : xs:qname
+  (xs NMTOKEN))
+
+(define _boolean : xs:qname
+  (xs boolean))
+
+(define _nonNegativeInteger : xs:qname
+  (xs nonNegativeInteger))
+
+(define _dateTime : xs:qname
+  (xs dateTime))
+
+(define _unsignedShort : xs:qname
+  (xs unsignedShort))
+
 (provide
- unbounded
- required
- optional
- string
- date
- integer)
+ (rename-out
+  [_unbounded          unbounded]
+  [_required           required]
+  [_optional           optional]
+  [_string             string]
+  [_date               date]
+  [_integer            integer]
+  [_NMTOKEN            NMTOKEN]
+  [_boolean            boolean]
+  [_nonNegativeInteger nonNegativeInteger]
+  [_dateTime           dateTime]
+  [_unsignedShort     unsignedShort]))
 
 ;;============================================================
 ;; Service Language
@@ -299,7 +321,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-input x])
-         z_i ...)]))
+         (set-union z_i ...))]))
   
 (define a-output : (Parameterof (U False wsdl:message))
   (make-parameter #f))
@@ -308,7 +330,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-output x])
-         z_i ...)]))
+         (set-union z_i ...))]))
   
 (define a-fault : (Parameterof (U False wsdl:message))
   (make-parameter #f))
@@ -317,7 +339,7 @@
   (syntax-parse stx
     [(_ x:id z_i ...)
      #'(parameterize ([a-fault x])
-         z_i ...)]))
+         (set-union z_i ...))]))
   
 (define-syntax (define-interface stx)
   (syntax-parse stx
@@ -325,13 +347,13 @@
      #'(define name : wsdl:port-type
          (wsdl:port-type
           'name
-          (set
+          (set-union
            op_i ...)))]))
 
 (define-syntax (op stx)
   (syntax-parse stx
     [(_ name:id)
-     #'(wsdl:operation 'name (a-input) (a-output) (a-fault))]))
+     #'(set (wsdl:operation 'name (a-input) (a-output) (a-fault)))]))
 
 (provide
  with-input
