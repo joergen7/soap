@@ -88,7 +88,7 @@
             check-equal?)
    (only-in racket/set
             set)
-   "ns.rkt")
+   "ns-forms.rkt")
 
   (let ([elem : xs:element
               (xs:element 'elem (xs string) 1 1)])

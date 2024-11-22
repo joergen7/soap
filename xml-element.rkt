@@ -62,7 +62,7 @@
 (module+ test
 
   (require typed/rackunit
-           "ns.rkt")
+           "ns-forms.rkt")
 
   (check-equal? (make-xml-element (xs blub))
                 '(xs:blub ()))

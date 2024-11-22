@@ -62,12 +62,7 @@
     (set))
    ref))
 
-(define-syntax (xs stx)
-  (syntax-parse stx
-      [(_ x:id)
-       #'(xs:make-qname 'x)]))
-
-(provide xs)
+(provide xs:make-qname)
 
 
 ;; wsdl
@@ -84,12 +79,7 @@
     (set))
    ref))
 
-(define-syntax (wsdl stx)
-  (syntax-parse stx
-      [(_ x:id)
-       #'(wsdl:make-qname 'x)]))
-
-(provide wsdl)
+(provide wsdl:make-qname)
 
 
 ;; soap
@@ -106,12 +96,7 @@
     (set))
    ref))
 
-(define-syntax (soap stx)
-  (syntax-parse stx
-      [(_ x:id)
-       #'(soap:make-qname 'x)]))
-
-(provide soap)
+(provide soap:make-qname)
 
 
 ;; xml:shorthand-list
@@ -121,23 +106,22 @@
   (map
    xs:qname->symbol
    (list
-    (xs import)
-    (xs element)
-    (xs minInclusive)
-    (xs minExclusive)
-    (xs maxInclusive)
-    (xs maxExclusive)
-    (xs enumeration)
-    (xs pattern)
-    (xs length)
-    (xs minLength)
-    (xs maxLength)
-    (xs attribute)
-    (wsdl input)
-    (wsdl output)
-    (wsdl fault)
-    (wsdl part)
-    )))
+    (xs:make-qname 'import)
+    (xs:make-qname 'element)
+    (xs:make-qname 'minInclusive)
+    (xs:make-qname 'minExclusive)
+    (xs:make-qname 'maxInclusive)
+    (xs:make-qname 'maxExclusive)
+    (xs:make-qname 'enumeration)
+    (xs:make-qname 'pattern)
+    (xs:make-qname 'length)
+    (xs:make-qname 'minLength)
+    (xs:make-qname 'maxLength)
+    (xs:make-qname 'attribute)
+    (wsdl:make-qname 'input)
+    (wsdl:make-qname 'output)
+    (wsdl:make-qname 'fault)
+    (wsdl:make-qname 'part))))
 
 
 (provide xml:shorthand-list)

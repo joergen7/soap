@@ -61,7 +61,7 @@
   (require
    (only-in typed/rackunit
             check-equal?)
-   "ns.rkt")
+   "ns-forms.rkt")
 
   (let* ([m : wsdl:message
             (wsdl:message 'm (set (wsdl:part 'body (xs string))))])

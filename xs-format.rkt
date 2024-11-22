@@ -12,6 +12,7 @@
  "alist.rkt"
  "xs.rkt"
  "ns.rkt"
+ "ns-forms.rkt"
  "tns.rkt"
  "import-table.rkt"
  "xml-element.rkt"

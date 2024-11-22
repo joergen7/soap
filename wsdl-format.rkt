@@ -13,6 +13,7 @@
  "xml-element.rkt"
  "wsdl.rkt"
  "ns.rkt"
+ "ns-forms.rkt"
  "tns.rkt"
  "import-table.rkt"
  "wsdl-member-table.rkt")

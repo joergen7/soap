@@ -105,7 +105,7 @@
   (require
    (only-in typed/rackunit
             check-equal?)
-   "ns.rkt")
+   "ns-forms.rkt")
 
   (check-equal? (xml:collect-import-table
                  (xs:schema 'schema
