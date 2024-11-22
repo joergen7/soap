@@ -62,3 +62,11 @@
  (struct-out wsdl:port-type)
  (struct-out wsdl:operation))
 
+
+;; wsdl:binding
+;;------------------------------------------------------------
+
+(struct wsdl:binding
+  ([name : Symbol]
+   [type : wsdl:port-type])
+  #:transparent)
