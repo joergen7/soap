@@ -5,8 +5,8 @@
           define/match
           match)
  (only-in racket/set
-          in-set
-          set)
+          set
+          set->list)
  (only-in typed/xml
           XExpr)
  "alist.rkt"
@@ -43,7 +43,9 @@
 
    (define xml-body : (Listof XExpr)
      (for/list ([m : wsdl:definitions-member
-                   (in-set body)])
+                   (in-list
+                    (sort (set->list body)
+                          wsdl:definitions-member<?))])
        (wsdl:wsdl->xexpr m f)))
 
    (define import-body : (Listof XExpr)
@@ -69,7 +71,9 @@
 
    (define xml-body : (Listof XExpr)
      (for/list ([part : wsdl:part
-                      (in-set part-set)])
+                      (in-list
+                       (sort (set->list part-set)
+                             wsdl:part<?))])
        (wsdl:wsdl->xexpr part f)))
      
    (make-xml-element
@@ -92,7 +96,9 @@
 
    (define xml-body : (Listof XExpr)
      (for/list ([x : wsdl:operation
-                   (in-set operation-set)])
+                   (in-list
+                    (sort (set->list operation-set)
+                          wsdl:operation<?))])
        (wsdl:wsdl->xexpr x f)))
    
    (make-xml-element

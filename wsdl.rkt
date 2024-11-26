@@ -1,5 +1,9 @@
 #lang typed/racket/base
 
+(require
+ (only-in racket/match
+          define/match))
+
 ;; wsdl:definitions
 ;;------------------------------------------------------------
 
@@ -16,10 +20,28 @@
 (define-predicate wsdl:definitions-member?
   wsdl:definitions-member)
 
+(: wsdl:definitions-member<?
+   (-> wsdl:definitions-member
+       wsdl:definitions-member
+       Boolean))
+(define (wsdl:definitions-member<? a b)
+
+  (: name (-> wsdl:definitions-member Symbol))
+  (define/match (name x)
+    [((wsdl:message name _part-set))
+     name]
+    [((wsdl:port-type name _operation-set))
+     name])
+
+  (symbol<? (name a) (name b)))
+     
+  
+
 (provide
  (struct-out wsdl:definitions)
  wsdl:definitions-member
- wsdl:definitions-member?)
+ wsdl:definitions-member?
+ wsdl:definitions-member<?)
 
 
 ;; wsdl:message
@@ -35,9 +57,17 @@
    [type : Symbol]) ; (U xs:qname xs:simple-type xs:complex-type)
   #:transparent)
 
+(: wsdl:part<?
+   (-> wsdl:part
+       wsdl:part
+       Boolean))
+(define (wsdl:part<? a b)
+  (symbol<? (wsdl:part-name a) (wsdl:part-name b)))
+
 (provide
  (struct-out wsdl:message)
- (struct-out wsdl:part))
+ (struct-out wsdl:part)
+ wsdl:part<?)
 
 
 ;; wsdl:port-type
@@ -55,9 +85,17 @@
    [fault  : (U #f Symbol)]) ; wsdl:message
   #:transparent)
 
+(: wsdl:operation<?
+   (-> wsdl:operation
+       wsdl:operation
+       Boolean))
+(define (wsdl:operation<? a b)
+  (symbol<? (wsdl:operation-name a) (wsdl:operation-name b)))
+
 (provide
  (struct-out wsdl:port-type)
- (struct-out wsdl:operation))
+ (struct-out wsdl:operation)
+ wsdl:operation<?)
 
 
 ;; wsdl:binding

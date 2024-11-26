@@ -40,7 +40,15 @@
    [complex-provide-set : (Setof Symbol)])
   #:transparent)
 
-(provide (struct-out xs:import))
+(: xs:import<? (-> xs:import xs:import Boolean))
+(define (xs:import<? a b)
+  (symbol<? (xs:import-prefix a) (xs:import-prefix b)))
+   
+  
+
+(provide
+ (struct-out xs:import)
+ xs:import<?)
 
 
 ;; xs:schema
@@ -59,11 +67,27 @@
 
 (define-predicate xs:schema-member?
   xs:schema-member)
+
+(: xs:schema-member<? (-> xs:schema-member xs:schema-member Boolean))
+(define (xs:schema-member<? a b)
+
+  (: name (-> xs:schema-member Symbol))
+  (define/match (name x)
+    [((xs:element name _type _min-occurs _max-occurs))
+     name]
+    [((xs:simple-type name _restriction))
+     name]
+    [((xs:complex-type name _attribute-set _body))
+     name])
+
+  (symbol<? (name a) (name b)))
+     
        
 
 (provide (struct-out xs:schema)
          xs:schema-member
-         xs:schema-member?)
+         xs:schema-member?
+         xs:schema-member<?)
 
 
 ;; xs:element
@@ -76,7 +100,13 @@
    [max-occurs : (U False Nonnegative-Integer)])
   #:transparent)
 
-(provide (struct-out xs:element))
+(: xs:element<? (-> xs:element xs:element Boolean))
+(define (xs:element<? a b)
+  (symbol<? (xs:element-name a) (xs:element-name b)))
+
+(provide
+ (struct-out xs:element)
+ xs:element<?)
 
 
 ;; xs:simple-type
@@ -199,7 +229,13 @@
    [required : Boolean])
   #:transparent)
 
-(provide (struct-out xs:attribute))
+(: xs:attribute<? (-> xs:attribute xs:attribute Boolean))
+(define (xs:attribute<? a b)
+  (symbol<? (xs:attribute-name a) (xs:attribute-name b)))
+
+(provide
+ (struct-out xs:attribute)
+ xs:attribute<?)          
 
 
 (module+ test

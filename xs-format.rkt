@@ -5,8 +5,9 @@
           define/match
           match)
  (only-in racket/set
+          in-set
           set
-          in-set)
+          set->list)
  (only-in typed/xml
           XExpr)
  "alist.rkt"
@@ -83,207 +84,217 @@
 
      (define xml-body : (Listof XExpr)
        (for/list ([m : xs:schema-member
-                     (in-set body)])
+                     (in-list
+                      (sort (set->list body)
+                            xs:schema-member<?))])
          (xs:xs->xexpr m f)))
 
-   (define import-body : (Listof XExpr)
-     (for/list ([x : xs:import
-                   (in-set import-set)])
-       (match x
-         [(xs:import prefix ns _simple-provide-set _complex-provide-set)
-          (make-xml-element
-           (xs import)
-           #:att-list (list (cons 'namespace ns)))])))
+     (define import-body : (Listof XExpr)
+       (for/list ([x : xs:import
+                     (in-list
+                      (sort (set->list import-set)
+                            xs:import<?))])
+         (match x
+           [(xs:import prefix ns _simple-provide-set _complex-provide-set)
+            (make-xml-element
+             (xs import)
+             #:att-list (list (cons 'namespace ns)))])))
 
-   (make-xml-element
-    (xs schema)
-    #:name-value  name
-    #:prefix-list (xml:extend-import-table
-                   import-set
-                   namespace
-                   xs:prefix)
-    #:att-list    (list
-                   (cons 'targetNamespace      namespace)
-                   (cons 'elementFormDefault   "qualified")
-                   (cons 'attributeFormDefault "unqualified"))
-    #:body        (append
-                   import-body
-                   xml-body))]
+     (make-xml-element
+      (xs schema)
+      #:name-value  name
+      #:prefix-list (xml:extend-import-table
+                     import-set
+                     namespace
+                     xs:prefix)
+      #:att-list    (list
+                     (cons 'targetNamespace      namespace)
+                     (cons 'elementFormDefault   "qualified")
+                     (cons 'attributeFormDefault "unqualified"))
+      #:body        (append
+                     import-body
+                     xml-body))]
 
-  ;; xs:element
-  [(xs:element name type min-occurs max-occurs)
-   
-   (define type-string : String
-     (f type))
+    ;; xs:element
+    [(xs:element name type min-occurs max-occurs)
+     
+     (define type-string : String
+       (f type))
 
-   (make-xml-element
-    (xs element)
-    #:name-value name
-    #:att-list   (append
-                  (list
-                   (cons 'type type-string))
-                  (xs:get-occur-list
-                   min-occurs
-                   max-occurs)))]
+     (make-xml-element
+      (xs element)
+      #:name-value name
+      #:att-list   (append
+                    (list
+                     (cons 'type type-string))
+                    (xs:get-occur-list
+                     min-occurs
+                     max-occurs)))]
 
 
-  ;; xs:simple-type
-  [(xs:simple-type name restriction)
-   (make-xml-element
-    (xs simpleType)
-    #:name-value name
-    #:body       (list
-                  (xs:xs->xexpr restriction f)))]
+    ;; xs:simple-type
+    [(xs:simple-type name restriction)
+     (make-xml-element
+      (xs simpleType)
+      #:name-value name
+      #:body       (list
+                    (xs:xs->xexpr restriction f)))]
 
-  ;; xs:restriction
-  [(xs:restriction base body)
+    ;; xs:restriction
+    [(xs:restriction base body)
 
-   (define xml-body : (Listof XExpr)
-     (for/list ([x : xs:restriction-member
-                   (in-set body)])
-       (xs:xs->xexpr x f)))
+     (define xml-body : (Listof XExpr)
+       (for/list ([x : xs:restriction-member
+                     (in-set body)])
+         (xs:xs->xexpr x f)))
 
-   (make-xml-element
-    (xs restriction)
-    #:att-list (list
-                (cons 'base (f base)))
-    #:body     xml-body)]
+     (make-xml-element
+      (xs restriction)
+      #:att-list (list
+                  (cons 'base (f base)))
+      #:body     xml-body)]
 
-  ;; xs:min-inclusive
-  [(xs:min-inclusive value)
+    ;; xs:min-inclusive
+    [(xs:min-inclusive value)
 
-   (make-xml-element
-    (xs minInclusive)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs minInclusive)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:min-exclusive
-  [(xs:min-exclusive value)
+    ;; xs:min-exclusive
+    [(xs:min-exclusive value)
 
-   (make-xml-element
-    (xs minExclusive)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs minExclusive)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:max-inclusive
-  [(xs:max-inclusive value)
+    ;; xs:max-inclusive
+    [(xs:max-inclusive value)
 
-   (make-xml-element
-    (xs maxInclusive)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs maxInclusive)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:max-exclusive
-  [(xs:max-exclusive value)
+    ;; xs:max-exclusive
+    [(xs:max-exclusive value)
 
-   (make-xml-element
-    (xs maxExclusive)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs maxExclusive)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:enumeration
-  [(xs:enumeration value)
+    ;; xs:enumeration
+    [(xs:enumeration value)
 
-   (make-xml-element
-    (xs enumeration)
-    #:att-list (list
-                (cons 'value value)))]
+     (make-xml-element
+      (xs enumeration)
+      #:att-list (list
+                  (cons 'value value)))]
 
-  ;; xs:pattern
-  [(xs:pattern value)
+    ;; xs:pattern
+    [(xs:pattern value)
 
-   (make-xml-element
-    (xs pattern)
-    #:att-list (list
-                (cons 'value value)))]
+     (make-xml-element
+      (xs pattern)
+      #:att-list (list
+                  (cons 'value value)))]
 
-  ;; xs:length
-  [(xs:length value)
+    ;; xs:length
+    [(xs:length value)
 
-   (make-xml-element
-    (xs length)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs length)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:min-length
-  [(xs:min-length value)
+    ;; xs:min-length
+    [(xs:min-length value)
 
-   (make-xml-element
-    (xs minLength)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs minLength)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:max-length
-  [(xs:max-length value)
+    ;; xs:max-length
+    [(xs:max-length value)
 
-   (make-xml-element
-    (xs maxLength)
-    #:att-list (list
-                (cons 'value (number->string value))))]
+     (make-xml-element
+      (xs maxLength)
+      #:att-list (list
+                  (cons 'value (number->string value))))]
 
-  ;; xs:complex-type
-  [(xs:complex-type name attribute-set body)
+    ;; xs:complex-type
+    [(xs:complex-type name attribute-set body)
 
-   (define l1 : (Listof XExpr)
-     (for/list ([a : xs:attribute
-                   (in-set attribute-set)])
-       (xs:xs->xexpr a f)))
+     (define l1 : (Listof XExpr)
+       (for/list ([a : xs:attribute
+                     (in-list
+                      (sort (set->list attribute-set)
+                            xs:attribute<?))])
+         (xs:xs->xexpr a f)))
 
-   (define l2 : (Listof XExpr)
-     (if body
-         (list (xs:xs->xexpr body f))
-         '()))
+     (define l2 : (Listof XExpr)
+       (if body
+           (list (xs:xs->xexpr body f))
+           '()))
 
-   (make-xml-element
-    (xs complexType)
-    #:name-value name
-    #:body       (append l1 l2))]
+     (make-xml-element
+      (xs complexType)
+      #:name-value name
+      #:body       (append l1 l2))]
 
-  ;; xs:all
-  [(xs:all element-set)
+    ;; xs:all
+    [(xs:all element-set)
 
-   (define xml-body : (Listof XExpr)
-     (for/list ([x : xs:element
-                   (in-set element-set)])
-       (xs:xs->xexpr x f)))
+     (define xml-body : (Listof XExpr)
+       (for/list ([x : xs:element
+                     (in-list
+                      (sort (set->list element-set)
+                            xs:element<?))])
+         (xs:xs->xexpr x f)))
 
-   (make-xml-element
-    (xs all)
-    #:body xml-body)]
+     (make-xml-element
+      (xs all)
+      #:body xml-body)]
 
-  ;; xs:choice
-  [(xs:choice min-occurs max-occurs element-set)
+    ;; xs:choice
+    [(xs:choice min-occurs max-occurs element-set)
 
-   (define occur-list : (Alistof String)
-     (xs:get-occur-list min-occurs max-occurs))
+     (define occur-list : (Alistof String)
+       (xs:get-occur-list min-occurs max-occurs))
 
-   (define xml-body : (Listof XExpr)
-     (for/list ([x : xs:element
-                   (in-set element-set)])
-       (xs:xs->xexpr x f)))
+     (define xml-body : (Listof XExpr)
+       (for/list ([x : xs:element
+                     (in-list
+                      (sort (set->list element-set)
+                            xs:element<?))])
+         (xs:xs->xexpr x f)))
 
-   (make-xml-element
-    (xs choice)
-    #:att-list occur-list
-    #:body     xml-body)]
-  
-  ;; xs:attribute
-  [(xs:attribute name type required)
+     (make-xml-element
+      (xs choice)
+      #:att-list occur-list
+      #:body     xml-body)]
+    
+    ;; xs:attribute
+    [(xs:attribute name type required)
 
-   (define l1 : (Alistof String)
-     (list
-      (cons 'type (f type))))
+     (define l1 : (Alistof String)
+       (list
+        (cons 'type (f type))))
 
-   (define l2 : (Alistof String)
-     (if required
-         (list
-          (cons 'use "required"))
-         '()))
-   
-   (make-xml-element
-    (xs attribute)
-    #:name-value name
-    #:att-list   (append l1 l2))]))
+     (define l2 : (Alistof String)
+       (if required
+           (list
+            (cons 'use "required"))
+           '()))
+     
+     (make-xml-element
+      (xs attribute)
+      #:name-value name
+      #:att-list   (append l1 l2))]))
 
 (provide xs:xs->xexpr)
 
