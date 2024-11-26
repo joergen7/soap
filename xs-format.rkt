@@ -12,11 +12,9 @@
  "alist.rkt"
  "xs.rkt"
  "ns.rkt"
- "ns-forms.rkt"
+ "ns-form.rkt"
  "tns.rkt"
- "import-table.rkt"
- "xml-element.rkt"
- "xs-member-table.rkt")
+ "xml-element.rkt")
 
 
 ;; xs:get-occur-list
@@ -73,48 +71,35 @@
 ;; xs:xs->xexpr
 ;;------------------------------------------------------------
 
-(: xs:xs->xexpr (-> xs:formattable XExpr))
-(define/match (xs:xs->xexpr o)
+(: xs:xs->xexpr (-> xs:formattable
+                    (-> Symbol String)
+                    XExpr))
+(define (xs:xs->xexpr o f)
 
-  ;; xs:schema
-  [((xs:schema name namespace body))
+  (match o
 
-   (define member-table : (Alistof xs:schema-member)
-     (alist-apply-union
-      xs:collect-member-table
-      body))
+    ;; xs:schema
+    [(xs:schema name namespace import-set body)
 
-   (define xml-body : (Listof XExpr)
-     (for/list ([p : (Pairof Symbol xs:schema-member)
-                   (in-list member-table)])
-       (match p
-         [(cons _name m)
-          (xs:xs->xexpr m)])))
-
-   (define import-table : (Alistof String)
-     (xml:collect-import-table o))
+     (define xml-body : (Listof XExpr)
+       (for/list ([m : xs:schema-member
+                     (in-set body)])
+         (xs:xs->xexpr m f)))
 
    (define import-body : (Listof XExpr)
-     (for/fold ([result : (Listof XExpr)
-                        '()])
-               ([p : (Pairof Symbol String)
-                   (in-list import-table)])
-       (match p
-         [(cons prf ns)
-          (if (hash-has-key? xml:prefix-table prf)
-              result
-              (cons
-               (make-xml-element
-                (xs import)
-                #:att-list (list
-                            (cons 'namespace ns)))
-               result))])))
+     (for/list ([x : xs:import
+                   (in-set import-set)])
+       (match x
+         [(xs:import prefix ns _simple-provide-set _complex-provide-set)
+          (make-xml-element
+           (xs import)
+           #:att-list (list (cons 'namespace ns)))])))
 
    (make-xml-element
     (xs schema)
     #:name-value  name
     #:prefix-list (xml:extend-import-table
-                   import-table
+                   import-set
                    namespace
                    xs:prefix)
     #:att-list    (list
@@ -126,10 +111,10 @@
                    xml-body))]
 
   ;; xs:element
-  [((xs:element name type min-occurs max-occurs))
+  [(xs:element name type min-occurs max-occurs)
    
    (define type-string : String
-     (xs:type->string type))
+     (f type))
 
    (make-xml-element
     (xs element)
@@ -143,29 +128,29 @@
 
 
   ;; xs:simple-type
-  [((xs:simple-type name restriction))
+  [(xs:simple-type name restriction)
    (make-xml-element
     (xs simpleType)
     #:name-value name
     #:body       (list
-                  (xs:xs->xexpr restriction)))]
+                  (xs:xs->xexpr restriction f)))]
 
   ;; xs:restriction
-  [((xs:restriction base body))
+  [(xs:restriction base body)
 
    (define xml-body : (Listof XExpr)
      (for/list ([x : xs:restriction-member
                    (in-set body)])
-       (xs:xs->xexpr x)))
+       (xs:xs->xexpr x f)))
 
    (make-xml-element
     (xs restriction)
     #:att-list (list
-                (cons 'base (xs:type->string base)))
+                (cons 'base (f base)))
     #:body     xml-body)]
 
   ;; xs:min-inclusive
-  [((xs:min-inclusive value))
+  [(xs:min-inclusive value)
 
    (make-xml-element
     (xs minInclusive)
@@ -173,7 +158,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:min-exclusive
-  [((xs:min-exclusive value))
+  [(xs:min-exclusive value)
 
    (make-xml-element
     (xs minExclusive)
@@ -181,7 +166,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:max-inclusive
-  [((xs:max-inclusive value))
+  [(xs:max-inclusive value)
 
    (make-xml-element
     (xs maxInclusive)
@@ -189,7 +174,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:max-exclusive
-  [((xs:max-exclusive value))
+  [(xs:max-exclusive value)
 
    (make-xml-element
     (xs maxExclusive)
@@ -197,7 +182,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:enumeration
-  [((xs:enumeration value))
+  [(xs:enumeration value)
 
    (make-xml-element
     (xs enumeration)
@@ -205,7 +190,7 @@
                 (cons 'value value)))]
 
   ;; xs:pattern
-  [((xs:pattern value))
+  [(xs:pattern value)
 
    (make-xml-element
     (xs pattern)
@@ -213,7 +198,7 @@
                 (cons 'value value)))]
 
   ;; xs:length
-  [((xs:length value))
+  [(xs:length value)
 
    (make-xml-element
     (xs length)
@@ -221,7 +206,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:min-length
-  [((xs:min-length value))
+  [(xs:min-length value)
 
    (make-xml-element
     (xs minLength)
@@ -229,7 +214,7 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:max-length
-  [((xs:max-length value))
+  [(xs:max-length value)
 
    (make-xml-element
     (xs maxLength)
@@ -237,16 +222,16 @@
                 (cons 'value (number->string value))))]
 
   ;; xs:complex-type
-  [((xs:complex-type name attribute-set body))
+  [(xs:complex-type name attribute-set body)
 
    (define l1 : (Listof XExpr)
      (for/list ([a : xs:attribute
                    (in-set attribute-set)])
-       (xs:xs->xexpr a)))
+       (xs:xs->xexpr a f)))
 
    (define l2 : (Listof XExpr)
      (if body
-         (list (xs:xs->xexpr body))
+         (list (xs:xs->xexpr body f))
          '()))
 
    (make-xml-element
@@ -255,19 +240,19 @@
     #:body       (append l1 l2))]
 
   ;; xs:all
-  [((xs:all element-set))
+  [(xs:all element-set)
 
    (define xml-body : (Listof XExpr)
      (for/list ([x : xs:element
                    (in-set element-set)])
-       (xs:xs->xexpr x)))
+       (xs:xs->xexpr x f)))
 
    (make-xml-element
     (xs all)
     #:body xml-body)]
 
   ;; xs:choice
-  [((xs:choice min-occurs max-occurs element-set))
+  [(xs:choice min-occurs max-occurs element-set)
 
    (define occur-list : (Alistof String)
      (xs:get-occur-list min-occurs max-occurs))
@@ -275,7 +260,7 @@
    (define xml-body : (Listof XExpr)
      (for/list ([x : xs:element
                    (in-set element-set)])
-       (xs:xs->xexpr x)))
+       (xs:xs->xexpr x f)))
 
    (make-xml-element
     (xs choice)
@@ -283,11 +268,11 @@
     #:body     xml-body)]
   
   ;; xs:attribute
-  [((xs:attribute name type required))
+  [(xs:attribute name type required)
 
    (define l1 : (Alistof String)
      (list
-      (cons 'type (xs:type->string type))))
+      (cons 'type (f type))))
 
    (define l2 : (Alistof String)
      (if required
@@ -298,7 +283,7 @@
    (make-xml-element
     (xs attribute)
     #:name-value name
-    #:att-list   (append l1 l2))])
+    #:att-list   (append l1 l2))]))
 
 (provide xs:xs->xexpr)
 
@@ -310,10 +295,17 @@
 
   (require typed/rackunit)
 
+  (: f (-> Symbol String))
+  (define (f s)
+    (match s
+      ['string "xs:string"]
+      ['blub   "z:blub"]
+      ['btype  "tns:btype"]))
+
   (define a-element : xs:element
     (xs:element
      'value
-     (xs string)
+     'string
      1
      1))
 
@@ -324,7 +316,7 @@
 
   (define a-restriction : xs:restriction
     (xs:restriction
-     (xs string)
+     'string
      (set)))
 
   (check-equal? (xs:get-occur-list 0 0)
@@ -348,34 +340,18 @@
   (check-equal? (xs:get-occur-list 1 #f)
                 '((maxOccurs . "unbounded")))
 
-  (check-equal? (xs:type->string
-                 (xs string))
-                "xs:string")
-
-  (check-equal? (xs:type->string
-                 (xs:simple-type
-                  'blub
-                  a-restriction))
-                "tns:blub")
-
-  (check-equal? (xs:type->string
-                 (xs:complex-type
-                  'bla
-                  (set)
-                  #f))
-                "tns:bla")
-                  
-  
   (check-equal? (xs:xs->xexpr
                  (xs:schema
                   'schema
                   "urn:target-namespace"
-                  (set)))
+                  (set)
+                  (set))
+                 f)
                 (list
                  'xs:schema
                  '((name                 "schema")
-                   (xmlns:tns            "urn:target-namespace")
                    (xmlns:xs             "http://www.w3.org/2001/XMLSchema")
+                   (xmlns:tns            "urn:target-namespace")
                    (targetNamespace      "urn:target-namespace")
                    (elementFormDefault   "qualified")
                    (attributeFormDefault "unqualified"))))
@@ -384,94 +360,97 @@
                  (xs:schema
                   'schema
                   "urn:target-namespace"
-                  (set a-element)))
+                  (set)
+                  (set a-element))
+                 f)
                 (list
                  'xs:schema
                  '((name                 "schema")
-                   (xmlns:tns            "urn:target-namespace")
                    (xmlns:xs             "http://www.w3.org/2001/XMLSchema")
+                   (xmlns:tns            "urn:target-namespace")
                    (targetNamespace      "urn:target-namespace")
                    (elementFormDefault   "qualified")
                    (attributeFormDefault "unqualified"))
                  x-element))
 
-  (check-equal? (xs:xs->xexpr a-element)
+  (check-equal? (xs:xs->xexpr a-element f)
                 x-element)
 
-  (check-equal? (xs:xs->xexpr (xs:element 'blub (xs string) 2 3))
+  (check-equal? (xs:xs->xexpr (xs:element 'blub 'string 2 3) f)
                 '(xs:element ((name      "blub")
                               (type      "xs:string")
                               (minOccurs "2")
                               (maxOccurs "3"))))
 
-  (check-equal? (xs:xs->xexpr (xs:simple-type 'atype a-restriction))
+  (check-equal? (xs:xs->xexpr (xs:simple-type 'atype a-restriction) f)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string")))))
   
-  (check-equal? (xs:xs->xexpr (xs:simple-type 'atype (xs:restriction (xs string) (set (xs:enumeration "bla")))))
+  (check-equal? (xs:xs->xexpr (xs:simple-type 'atype (xs:restriction 'string (set (xs:enumeration "bla")))) f)
                 '(xs:simpleType ((name "atype"))
                                 (xs:restriction ((base "xs:string"))
                                                 (xs:enumeration ((value "bla"))))))
 
-  (check-equal? (xs:xs->xexpr (xs:min-inclusive 5))
+  (check-equal? (xs:xs->xexpr (xs:min-inclusive 5) f)
                 '(xs:minInclusive ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:min-exclusive 5))
+  (check-equal? (xs:xs->xexpr (xs:min-exclusive 5) f)
                 '(xs:minExclusive ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:max-inclusive 5))
+  (check-equal? (xs:xs->xexpr (xs:max-inclusive 5) f)
                 '(xs:maxInclusive ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:max-exclusive 5))
+  (check-equal? (xs:xs->xexpr (xs:max-exclusive 5) f)
                 '(xs:maxExclusive ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:enumeration "blub"))
+  (check-equal? (xs:xs->xexpr (xs:enumeration "blub") f)
                 '(xs:enumeration ((value "blub"))))
 
-  (check-equal? (xs:xs->xexpr (xs:pattern "blub"))
+  (check-equal? (xs:xs->xexpr (xs:pattern "blub") f)
                 '(xs:pattern ((value "blub"))))
 
-  (check-equal? (xs:xs->xexpr (xs:length 5))
+  (check-equal? (xs:xs->xexpr (xs:length 5) f)
                 '(xs:length ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:min-length 5))
+  (check-equal? (xs:xs->xexpr (xs:min-length 5) f)
                 '(xs:minLength ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:max-length 5))
+  (check-equal? (xs:xs->xexpr (xs:max-length 5) f)
                 '(xs:maxLength ((value "5"))))
 
-  (check-equal? (xs:xs->xexpr (xs:complex-type 'atype (set) #f))
+  (check-equal? (xs:xs->xexpr (xs:complex-type 'atype (set) #f) f)
                 '(xs:complexType ((name "atype"))))
 
-  (check-equal? (xs:xs->xexpr (xs:complex-type 'atype (set) (xs:all (set))))
+  (check-equal? (xs:xs->xexpr (xs:complex-type 'atype (set) (xs:all (set))) f)
                 '(xs:complexType ((name "atype")) (xs:all ())))
 
   (check-equal? (xs:xs->xexpr
-                 (xs:complex-type 'atype (set (xs:attribute 'prodid (xs string) #f)) (xs:all (set))))
+                 (xs:complex-type 'atype (set (xs:attribute 'prodid 'string #f)) (xs:all (set)))
+                 f)
                 '(xs:complexType ((name "atype"))
                                  (xs:attribute ((name "prodid")
                                                 (type "xs:string")))
                                  (xs:all ())))
 
-  (check-equal? (xs:xs->xexpr (xs:attribute 'prodid (xs string) #f))
+  (check-equal? (xs:xs->xexpr (xs:attribute 'prodid 'string #f) f)
                 '(xs:attribute ((name "prodid")
                                 (type "xs:string"))))
 
-  (check-equal? (xs:xs->xexpr (xs:attribute 'prodid (xs string) #t))
+  (check-equal? (xs:xs->xexpr (xs:attribute 'prodid 'string #t) f)
                 '(xs:attribute ((name    "prodid")
                                 (type    "xs:string")
                                 (use     "required"))))
 
-  (check-equal? (xs:xs->xexpr (xs:all (set)))
+  (check-equal? (xs:xs->xexpr (xs:all (set)) f)
                 '(xs:all ()))
 
-  (check-equal? (xs:xs->xexpr (xs:all (set a-element)))
+  (check-equal? (xs:xs->xexpr (xs:all (set a-element)) f)
                 (list 'xs:all '() x-element))
 
-  (check-equal? (xs:xs->xexpr (xs:choice 1 1 (set)))
+  (check-equal? (xs:xs->xexpr (xs:choice 1 1 (set)) f)
                 '(xs:choice ()))
 
-  (check-equal? (xs:xs->xexpr (xs:choice 2 3 (set a-element)))
+  (check-equal? (xs:xs->xexpr (xs:choice 2 3 (set a-element)) f)
                 (list 'xs:choice '((minOccurs "2") (maxOccurs "3")) x-element))
 
   (check-equal? (xs:xs->xexpr
@@ -479,17 +458,18 @@
                   'schema
                   "urn:schema"
                   (set
+                   (xs:import 'z "urn:z" (set 'blub) (set)))
+                  (set
                    (xs:simple-type
                     'atype
                     (xs:restriction
-                     (xs:qname
-                      (xs:import 'z "urn:z" (set 'blub) (set))
-                      'blub)
-                     (set))))))
+                     'blub
+                     (set)))))
+                 f)
                 '(xs:schema
                   ((name                 "schema")
-                   (xmlns:tns            "urn:schema")
                    (xmlns:xs             "http://www.w3.org/2001/XMLSchema")
+                   (xmlns:tns            "urn:schema")
                    (xmlns:z              "urn:z")
                    (targetNamespace      "urn:schema")
                    (elementFormDefault   "qualified")
@@ -504,21 +484,23 @@
                   'schema
                   "urn:schema"
                   (set
+                   (xs:import 'z "urn:z" (set 'blub) (set)))
+                  (set
                    (xs:simple-type
                     'atype
                     (xs:restriction
-                     (xs:simple-type
-                      'btype
-                      (xs:restriction
-                       (xs:qname
-                      (xs:import 'z "urn:z" (set 'blub) (set))
-                      'blub)
-                       (set)))
-                     (set))))))
+                     'btype
+                     (set)))
+                   (xs:simple-type
+                    'btype
+                    (xs:restriction
+                     'blub
+                     (set)))))
+                 f)
                 '(xs:schema
                   ((name                 "schema")
-                   (xmlns:tns            "urn:schema")
                    (xmlns:xs             "http://www.w3.org/2001/XMLSchema")
+                   (xmlns:tns            "urn:schema")
                    (xmlns:z              "urn:z")
                    (targetNamespace      "urn:schema")
                    (elementFormDefault   "qualified")

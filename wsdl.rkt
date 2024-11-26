@@ -1,8 +1,5 @@
 #lang typed/racket/base
 
-(require
-  "xs.rkt")
-
 ;; wsdl:definitions
 ;;------------------------------------------------------------
 
@@ -35,7 +32,7 @@
 
 (struct wsdl:part
   ([name : Symbol]
-   [type : (U xs:qname xs:simple-type xs:complex-type)])
+   [type : Symbol]) ; (U xs:qname xs:simple-type xs:complex-type)
   #:transparent)
 
 (provide
@@ -53,9 +50,9 @@
 
 (struct wsdl:operation
   ([name   : Symbol]
-   [input  : (U #f wsdl:message)]
-   [output : (U #f wsdl:message)]
-   [fault  : (U #f wsdl:message)])
+   [input  : (U #f Symbol)]  ; wsdl:message
+   [output : (U #f Symbol)]  ; wsdl:message
+   [fault  : (U #f Symbol)]) ; wsdl:message
   #:transparent)
 
 (provide
@@ -68,5 +65,5 @@
 
 (struct wsdl:binding
   ([name : Symbol]
-   [type : wsdl:port-type])
+   [type : Symbol]) ; wsdl:port-type
   #:transparent)

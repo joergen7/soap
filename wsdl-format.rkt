@@ -13,10 +13,8 @@
  "xml-element.rkt"
  "wsdl.rkt"
  "ns.rkt"
- "ns-forms.rkt"
- "tns.rkt"
- "import-table.rkt"
- "wsdl-member-table.rkt")
+ "ns-form.rkt"
+ "tns.rkt")
 
 (provide
  wsdl:formattable
@@ -34,47 +32,30 @@
   wsdl:formattable)
 
 (: wsdl:wsdl->xexpr (-> wsdl:formattable
+                        (-> Symbol String)
                         XExpr))
-(define/match (wsdl:wsdl->xexpr o)
+(define (wsdl:wsdl->xexpr o f)
+
+  (match o
 
   ;; wsdl:definitions
-  [((wsdl:definitions name namespace body))
-
-   (define member-table : (Alistof wsdl:definitions-member)
-     (alist-apply-union
-      wsdl:collect-member-table
-      body))
+  [(wsdl:definitions name namespace body)
 
    (define xml-body : (Listof XExpr)
-     (for/list ([p : (Pairof Symbol wsdl:definitions-member)
-                   (in-list member-table)])
-       (match p
-         [(cons _name m)
-          (wsdl:wsdl->xexpr m)])))
-   
-   (define import-table : (Alistof String)
-     (xml:collect-import-table o))
+     (for/list ([m : wsdl:definitions-member
+                   (in-set body)])
+       (wsdl:wsdl->xexpr m f)))
 
    (define import-body : (Listof XExpr)
-     (for/fold ([result : (Listof XExpr)
-                        '()])
-               ([pair : (Pairof Symbol String)
-                      (in-list (xml:extend-import-table import-table namespace))])
-       (match pair
-         [(cons prf ns)
-          (if (hash-has-key? xml:prefix-table prf)
-              result
-              (cons
-               (make-xml-element
-                (wsdl import)
-                #:att-list (list
-                            (cons 'namespace ns)))
-               result))])))
-
+     (list
+      (make-xml-element
+       (wsdl import)
+       #:att-list (list (cons 'namespace namespace)))))
+   
    (make-xml-element
     (wsdl definitions)
     #:prefix-list (xml:extend-import-table
-                   import-table
+                   (set)
                    namespace
                    wsdl:prefix
                    soap:prefix)
@@ -84,12 +65,12 @@
                        xml-body))]
 
   ;; wsdl:message
-  [((wsdl:message name part-set))
+  [(wsdl:message name part-set)
 
    (define xml-body : (Listof XExpr)
      (for/list ([part : wsdl:part
                       (in-set part-set)])
-       (wsdl:wsdl->xexpr part)))
+       (wsdl:wsdl->xexpr part f)))
      
    (make-xml-element
     (wsdl message)
@@ -98,21 +79,21 @@
     #:body xml-body)]
 
   ;; wsdl:part
-  [((wsdl:part name type))
+  [(wsdl:part name type)
 
    (make-xml-element
     (wsdl part)
     #:name-value name
     #:att-list (list
-                (cons 'type (xs:type->string type))))]
+                (cons 'type (f type))))]
 
   ;; wsdl:port-type
-  [((wsdl:port-type name operation-set))
+  [(wsdl:port-type name operation-set)
 
    (define xml-body : (Listof XExpr)
      (for/list ([x : wsdl:operation
                    (in-set operation-set)])
-       (wsdl:wsdl->xexpr x)))
+       (wsdl:wsdl->xexpr x f)))
    
    (make-xml-element
     (wsdl portType)
@@ -120,21 +101,21 @@
     #:body xml-body)]
 
   ;; wsdl:operation
-  [((wsdl:operation name input output fault))
+  [(wsdl:operation name input output fault)
 
    (: proc (-> Symbol
-               (U False wsdl:message)
+               (U False Symbol)
                (Listof XExpr)))
    (define (proc key msg)
      (match msg
        [#f
         '()]
-       [(wsdl:message name _part-set)
+       [(? symbol? x)
         (list
          (make-xml-element
           key
           #:att-list (list
-                      (cons 'message (wsdl:message->string msg)))))]))
+                      (cons 'message (f x)))))]))
 
    (define input-list : (Listof XExpr)
      (proc 'wsdl:input input))
@@ -151,7 +132,7 @@
     #:body (append
             input-list
             output-list
-            fault-list))])
+            fault-list))]))
 
 
 
@@ -159,18 +140,24 @@
 
   (require typed/rackunit)
 
+  (: f (-> Symbol String))
+  (define (f s)
+    (match s
+      ['string "xs:string"]
+      ['msg    "tns:msg"]))
+
   (check-equal?
-   (wsdl:wsdl->xexpr (wsdl:part 'input (xs string)))
+   (wsdl:wsdl->xexpr (wsdl:part 'input 'string) f)
    '(wsdl:part ((name "input") (type "xs:string"))))
 
   (check-equal?
-   (wsdl:wsdl->xexpr (wsdl:message 'msg (set (wsdl:part 'input (xs string)))))
+   (wsdl:wsdl->xexpr (wsdl:message 'msg (set (wsdl:part 'input 'string))) f)
    '(wsdl:message
      ((name "msg"))
      (wsdl:part ((name "input") (type "xs:string")))))
 
   (check-equal?
-   (wsdl:wsdl->xexpr (wsdl:operation 'op #f #f #f))
+   (wsdl:wsdl->xexpr (wsdl:operation 'op #f #f #f) f)
    '(wsdl:operation
      ((name "op"))))
 
@@ -178,9 +165,10 @@
    (wsdl:wsdl->xexpr
     (wsdl:operation
      'op
-     (wsdl:message 'msg (set (wsdl:part 'input (xs string))))
+     'msg
      #f
-     #f))
+     #f)
+    f)
    '(wsdl:operation
      ((name "op"))
      (wsdl:input ((message "tns:msg")))))
@@ -190,8 +178,9 @@
     (wsdl:operation
      'op
      #f
-     (wsdl:message 'msg (set (wsdl:part 'output (xs string))))
-     #f))
+     'msg
+     #f)
+    f)
    '(wsdl:operation
      ((name "op"))
      (wsdl:output ((message "tns:msg")))))
@@ -202,19 +191,22 @@
      'op
      #f
      #f
-     (wsdl:message 'msg (set (wsdl:part 'fault (xs string))))))
+     'msg)
+    f)
    '(wsdl:operation
      ((name "op"))
      (wsdl:fault ((message "tns:msg")))))
 
   (check-equal?
    (wsdl:wsdl->xexpr
-    (wsdl:port-type 'myport (set)))
+    (wsdl:port-type 'myport (set))
+    f)
    '(wsdl:portType ((name "myport"))))
 
   (check-equal?
    (wsdl:wsdl->xexpr
-    (wsdl:port-type 'myport (set (wsdl:operation 'op #f #f #f))))
+    (wsdl:port-type 'myport (set (wsdl:operation 'op #f #f #f)))
+    f)
    '(wsdl:portType ((name "myport"))
                    (wsdl:operation ((name "op")))))
 
@@ -224,7 +216,8 @@
      'myport
      (set
       (wsdl:operation 'op1 #f #f #f)
-      (wsdl:operation 'op2 #f #f #f))))
+      (wsdl:operation 'op2 #f #f #f)))
+    f)
    '(wsdl:portType ((name "myport"))
                    (wsdl:operation ((name "op1")))
                    (wsdl:operation ((name "op2"))))))

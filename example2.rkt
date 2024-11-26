@@ -10,9 +10,6 @@
 (define-type valueType
   (as string))
 
-(define-schema some-schema
-  valueType)
-
 
 ;; demo-schema
 ;;------------------------------------------------------------
@@ -70,15 +67,6 @@
   (as myStringType))
 
 
-(define-schema demo-schema
-  myMonthType
-  score
-  state
-  myStruct1
-  myStruct2
-  myStruct3
-  myStruct4)
-
 (display-schema demo-schema)
 
 
@@ -113,45 +101,6 @@
 
 
 
-(define-service demo-service
-  firstInterface
-  secondInterface)
-
 (display-service demo-service)
 
-
-#|
-(define-service demo-service
-
-  (import types demo-schema)
-
-  (define-message error-message)
-    
-
-  (define-message op1-input-message
-    [body (: types myStruct1)])
-  
-  (define-message op1-output-message
-    (body (: types state)))
-  
-
-  (define-message op2-input-message)
-  (define-message op2-output-message)
-
-  (define-interface firstInterface
-    
-    [op1 (input  op1-input-message)
-         (output op1-output-message)
-         (fault  error-message)]
-    
-    [op2 (input  op2-input-message)
-         (output op2-output-message)])
-
-  (define-interface secondInterface))
-
-
-
-
-(display-service demo-service)
-|#
 

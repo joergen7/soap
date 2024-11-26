@@ -8,33 +8,27 @@
 ;;------------------------------------------------------------
 
 (struct xs:qname
-  ([source : xs:import]
+  ([prefix : Symbol]
    [name   : Symbol])
   #:transparent)
 
+;; xs:qname
+;;------------------------------------------------------------
+
 (: xs:qname->string (-> xs:qname String))
 (define/match (xs:qname->string qn)
-  [((xs:qname (xs:import prefix
-                         _namespace
-                         _simple-provide-set
-                         _complex-provide-set)
-              name))
-   (format "~a:~a" prefix name)]
-  [((xs:qname (xs:schema schema-name
-                         _namespace
-                         _body)
-              name))
-   (format "~a:~a" schema-name name)])
+  [((xs:qname prefix name))
+   (format "~a:~a" prefix name)])
 
 
 (: xs:qname->symbol (-> xs:qname Symbol))
 (define (xs:qname->symbol qn)
   (string->symbol (xs:qname->string qn)))
 
-(provide (struct-out xs:qname)
-         xs:qname->string
-         xs:qname->symbol)
-
+(provide
+ (struct-out xs:qname)
+ xs:qname->string
+ xs:qname->symbol)
 
 ;; xs:import
 ;;------------------------------------------------------------
@@ -53,9 +47,10 @@
 ;;------------------------------------------------------------
 
 (struct xs:schema
-  ([name      : Symbol]
-   [namespace : String]
-   [body      : (Setof xs:schema-member)]))
+  ([name       : Symbol]
+   [namespace  : String]
+   [import-set : (Setof xs:import)]
+   [body       : (Setof xs:schema-member)]))
 
 (define-type xs:schema-member
   (U xs:element
@@ -76,7 +71,7 @@
 
 (struct xs:element
   ([name       : Symbol]
-   [type       : (U xs:qname xs:simple-type xs:complex-type)]
+   [type       : Symbol] ; (U xs:qname xs:simple-type xs:complex-type)
    [min-occurs : Nonnegative-Integer]
    [max-occurs : (U False Nonnegative-Integer)])
   #:transparent)
@@ -99,7 +94,7 @@
 ;;------------------------------------------------------------
 
 (struct xs:restriction
-  ([base : (U xs:qname xs:simple-type)]
+  ([base : Symbol] ; (U xs:qname xs:simple-type)
    [body : (Setof xs:restriction-member)])
   #:transparent)
 
@@ -200,40 +195,27 @@
 
 (struct xs:attribute
   ([name     : Symbol]
-   [type     : (U xs:qname xs:simple-type)]
+   [type     : Symbol] ; (U xs:qname xs:simple-type)
    [required : Boolean])
   #:transparent)
 
 (provide (struct-out xs:attribute))
 
 
-
-
-
 (module+ test
 
   (require
-   (only-in racket/set
-            set)
-   typed/rackunit)
-
-  ;; qname
-  ;;------------------------------------------------------------
+   (only-in typed/rackunit
+            check-equal?))
 
   (check-equal? (xs:qname->string
                  (xs:qname
-                  (xs:import 'bla
-                             "http://bla.org"
-                             (set)
-                             (set))
+                  'bla
                   'blub))
-                "bla:blub")
+                "bla:blub"))
 
-  (check-equal? (xs:qname->symbol
-                 (xs:qname
-                  (xs:import 'bla
-                             "http://bla.org"
-                             (set)
-                             (set))
-                  'blub))
-                'bla:blub))
+
+
+
+
+

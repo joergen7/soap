@@ -22,7 +22,4 @@
    (exchange    exchangeType    1 1)
    (number      numberType      1 1)))
 
-(define-schema schema1
-  telephoneNumberType)
-
 (display-schema schema1)
