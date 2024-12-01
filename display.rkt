@@ -14,12 +14,18 @@
           prolog
           xexpr->xml
           element?
+          P-I
           XExpr)
  "ns-form.rkt"
  "xs.rkt"
  "xs-format.rkt"
  "wsdl.rkt"
  "wsdl-format.rkt")
+
+(require/typed
+    "display-aux.rkt"
+  [xml-p-i P-I])
+
 
 (provide
  with-output-file
@@ -52,7 +58,10 @@
 (define (display-xexpr e)
   (parameterize ([empty-tag-shorthand xml:shorthand-list])
     (display-xml
-     (document (prolog '() #f '())
+     (document (prolog
+                (list xml-p-i)
+                #f
+                '())
                (assert (xexpr->xml e) element?)
                '()))))
 
